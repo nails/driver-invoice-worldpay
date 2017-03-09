@@ -22,7 +22,7 @@
     "require":
     {
         "nailsapp/module-invoice": "dev-develop",
-        "worldpay/worldpay-php": "3.*"
+        "worldpay/worldpay-lib-php": "~2.1.2"
     },
     "require-dev":
     {
