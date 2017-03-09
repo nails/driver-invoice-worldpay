@@ -1,0 +1,106 @@
+{
+    "name": "nailsapp/driver-invoice-worldpay",
+    "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Invoice Module", "Payments", "Driver", "WorldPay"],
+    "homepage": "http://nailsapp.co.uk/modules/invoice/driver/worldpay",
+    "description": "This is the \"WorldPay\" driver for the Nails Invoice module.",
+    "license": "MIT",
+    "authors":
+    [
+        {
+            "name": "Pablo de la Pena",
+            "email": "p@nailsapp.co.uk",
+            "homepage": "http://nailsapp.co.uk",
+            "role": "Developer"
+        }
+    ],
+    "support":
+    {
+        "email": "hello@nailsapp.co.uk"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require":
+    {
+        "nailsapp/module-invoice": "dev-develop",
+        "worldpay/worldpay-php": "3.*"
+    },
+    "require-dev":
+    {
+        "phpunit/phpunit": "4.*"
+    },
+    "autoload":
+    {
+        "psr-4": {"Nails\\Invoice\\Driver\\": "src/"}
+    },
+    "extra":
+    {
+        "nails" :
+        {
+            "name": "WorldPay",
+            "type": "driver",
+            "subType": "payment",
+            "forModule": "nailsapp/module-invoice",
+            "data": {
+                "namespace": "Nails\\Invoice\\Driver\\Payment\\",
+                "class": "WorldPay",
+                "settings": [
+                    {
+                        "key": "sLabel",
+                        "label": "Label",
+                        "info": "The name of the provider, as seen by customers.",
+                        "default": "WorldPay"
+                    },
+                    {
+                        "key": "iLogoId",
+                        "label": "Logo",
+                        "info": "The logo of the provider, as seen by customers",
+                        "default": null,
+                        "type": "image",
+                        "bucket": "nailsapp-driver-invoice-worldpay"
+                    },
+                    {
+                        "key": "sStatementDescriptor",
+                        "label": "Statement Descriptor",
+                        "info": "The text shown on the customer's statement. You can sub in {{INVOICE_REF}} for the invoice reference.",
+                        "default": "INV #{{INVOICE_REF}}",
+                        "max_length": 22
+                    },
+                    {
+                        "legend": "Test API Keys",
+                        "fields": [
+                            {
+                                "key": "sKeyTestSecret",
+                                "label": "Secret Key",
+                                "type": "password",
+                                "encrypted": true
+                            },
+                            {
+                                "key": "sKeyTestPublic",
+                                "label": "Public Key",
+                                "type": "password",
+                                "encrypted": true
+                            }
+                        ]
+                    },
+                    {
+                        "legend": "Live API Keys",
+                        "fields": [
+                            {
+                                "key": "sKeyLiveSecret",
+                                "label": "Secret Key",
+                                "type": "password",
+                                "encrypted": true
+                            },
+                            {
+                                "key": "sKeyLivePublic",
+                                "label": "Public Key",
+                                "type": "password",
+                                "encrypted": true
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+}
