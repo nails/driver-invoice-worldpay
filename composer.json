@@ -1,5 +1,5 @@
 {
-    "name": "nailsapp/driver-invoice-worldpay",
+    "name": "nails/driver-invoice-worldpay",
     "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Invoice Module", "Payments", "Driver", "WorldPay"],
     "homepage": "http://nailsapp.co.uk/modules/invoice/driver/worldpay",
     "description": "This is the \"WorldPay\" driver for the Nails Invoice module.",
@@ -21,7 +21,7 @@
     "prefer-stable": true,
     "require":
     {
-        "nailsapp/module-invoice": "dev-develop",
+        "nails/module-invoice": "dev-develop",
         "worldpay/worldpay-lib-php": "~2.1.2"
     },
     "require-dev":
@@ -39,7 +39,7 @@
             "name": "WorldPay",
             "type": "driver",
             "subType": "payment",
-            "forModule": "nailsapp/module-invoice",
+            "forModule": "nails/module-invoice",
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\Payment\\",
                 "class": "WorldPay",
@@ -56,7 +56,7 @@
                         "info": "The logo of the provider, as seen by customers",
                         "default": null,
                         "type": "image",
-                        "bucket": "nailsapp-driver-invoice-worldpay"
+                        "bucket": "nails-driver-invoice-worldpay"
                     },
                     {
                         "key": "sStatementDescriptor",
