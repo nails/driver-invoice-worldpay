@@ -6,5 +6,3 @@
 [![Join the chat on Slack!](https://now-examples-slackin-rayibnpwqe.now.sh/badge.svg)](https://nails-app.slack.com/shared_invite/MTg1NDcyNjI0ODcxLTE0OTUwMzA1NTYtYTZhZjc5YjExMQ)
 
 This is the "World" driver for the Nails Invoice module, it allows the module to accept payments using the WorldPay payment processor.
-
-http://nailsapp.co.uk/modules/invoice/driver/worldpay
