@@ -66,7 +66,7 @@
                         "max_length": 22
                     },
                     {
-                        "legend": "Test API Keys",
+                        "legend": "API Keys - Test",
                         "fields": [
                             {
                                 "key": "sKeyTestSecret",
@@ -83,7 +83,7 @@
                         ]
                     },
                     {
-                        "legend": "Live API Keys",
+                        "legend": "API Keys - Live",
                         "fields": [
                             {
                                 "key": "sKeyLiveSecret",

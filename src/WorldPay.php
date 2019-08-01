@@ -13,6 +13,9 @@
 namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Invoice\Driver\PaymentBase;
+use Nails\Invoice\Factory\ChargeResponse;
+use Nails\Invoice\Factory\CompleteResponse;
+use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
 
 /**
@@ -29,9 +32,9 @@ class WorldPay extends PaymentBase
      *
      * @param \stdClass $oInvoice The invoice being charged
      *
-     * @return boolean
+     * @return bool
      */
-    public function isAvailable($oInvoice)
+    public function isAvailable($oInvoice): bool
     {
         return true;
     }
@@ -39,11 +42,24 @@ class WorldPay extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
+     * Returns the currencies which this driver supports, it will only be presented
+     * when attempting to pay an invoice in a supported currency
+     *
+     * @return string[]|null
+     */
+    public function getSupportedCurrencies(): ?array
+    {
+        return null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Returns whether the driver uses a redirect payment flow or not.
      *
-     * @return boolean
+     * @return bool
      */
-    public function isRedirect()
+    public function isRedirect(): bool
     {
         return true;
     }
@@ -95,7 +111,7 @@ class WorldPay extends PaymentBase
      * @param string    $sFailUrl     The URL to go to after failed payment
      * @param string    $sContinueUrl The URL to go to after payment is completed
      *
-     * @return \Nails\Invoice\Factory\ChargeResponse
+     * @return ChargeResponse
      */
     public function charge(
         $iAmount,
@@ -108,7 +124,7 @@ class WorldPay extends PaymentBase
         $sSuccessUrl,
         $sFailUrl,
         $sContinueUrl
-    ) {
+    ): ChargeResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
     }
 
@@ -138,9 +154,9 @@ class WorldPay extends PaymentBase
      * @param array     $aGetVars  Any $_GET variables passed from the redirect flow
      * @param array     $aPostVars Any $_POST variables passed from the redirect flow
      *
-     * @return \Nails\Invoice\Factory\CompleteResponse
+     * @return CompleteResponse
      */
-    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars)
+    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars): CompleteResponse
     {
         //  @todo (Pablo - 2019-07-24) - Implement this method
     }
@@ -158,9 +174,9 @@ class WorldPay extends PaymentBase
      * @param \stdClass $oPayment    The payment object
      * @param \stdClass $oInvoice    The invoice object
      *
-     * @return \Nails\Invoice\Factory\RefundResponse
+     * @return RefundResponse
      */
-    public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice)
+    public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice): RefundResponse
     {
         //  @todo (Pablo - 2019-07-24) - Implement this method
     }
