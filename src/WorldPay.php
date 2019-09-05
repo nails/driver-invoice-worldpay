@@ -12,6 +12,7 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
+use Nails\Common\Exception\NailsException;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
@@ -126,6 +127,7 @@ class WorldPay extends PaymentBase
         $sContinueUrl
     ): ChargeResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
+        throw new NailsException('Method not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -142,6 +144,7 @@ class WorldPay extends PaymentBase
     public function sca(ScaResponse $oScaResponse, array $aData, string $sSuccessUrl): ScaResponse
     {
         //  @todo (Pablo - 2019-07-24) - Implement this method
+        throw new NailsException('Method not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -159,6 +162,7 @@ class WorldPay extends PaymentBase
     public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars): CompleteResponse
     {
         //  @todo (Pablo - 2019-07-24) - Implement this method
+        throw new NailsException('Method not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -179,5 +183,25 @@ class WorldPay extends PaymentBase
     public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice): RefundResponse
     {
         //  @todo (Pablo - 2019-07-24) - Implement this method
+        throw new NailsException('Method not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Creates a new payment source, returns a semi-populated source resource
+     *
+     * @param \Nails\Invoice\Resource\Source $oResource The Resouce object to update
+     * @param array                          $aData     Data passed from the caller
+     *
+     * @throws DriverException
+     */
+    public function createSource(
+        \Nails\Invoice\Resource\Source &$oResource,
+        array $aData
+    ): void
+    {
+        //  @todo (Pablo - 2019-09-05) - implement this
+        throw new NailsException('Method not implemented');
     }
 }
