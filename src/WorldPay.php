@@ -109,8 +109,7 @@ class WorldPay extends PaymentBase
      * @param \stdClass $oPayment     The payment object
      * @param \stdClass $oInvoice     The invoice object
      * @param string    $sSuccessUrl  The URL to go to after successful payment
-     * @param string    $sFailUrl     The URL to go to after failed payment
-     * @param string    $sContinueUrl The URL to go to after payment is completed
+     * @param string    $sErrorUrl    The URL to go to after failed payment
      *
      * @return ChargeResponse
      */
@@ -123,8 +122,7 @@ class WorldPay extends PaymentBase
         $oPayment,
         $oInvoice,
         $sSuccessUrl,
-        $sFailUrl,
-        $sContinueUrl
+        $sErrorUrl
     ): ChargeResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
         throw new NailsException('Method not implemented');
