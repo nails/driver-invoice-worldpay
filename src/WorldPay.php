@@ -197,8 +197,7 @@ class WorldPay extends PaymentBase
     public function createSource(
         \Nails\Invoice\Resource\Source &$oResource,
         array $aData
-    ): void
-    {
+    ): void {
         //  @todo (Pablo - 2019-09-05) - implement this
         throw new NailsException('Method not implemented');
     }
