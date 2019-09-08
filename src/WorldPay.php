@@ -13,11 +13,13 @@
 namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Common\Exception\NailsException;
+use Nails\Currency\Resource\Currency;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
+use Nails\Invoice\Resource;
 use stdClass;
 
 /**
@@ -27,16 +29,14 @@ use stdClass;
  */
 class WorldPay extends PaymentBase
 {
-    //  @todo (Pablo - 2019-07-22) - Complete this driver
-
     /**
      * Returns whether the driver is available to be used against the selected invoice
      *
-     * @param stdClass $oInvoice The invoice being charged
+     * @param Resource\Invoice $oInvoice The invoice being charged
      *
      * @return bool
      */
-    public function isAvailable($oInvoice): bool
+    public function isAvailable(Resource\Invoice $oInvoice): bool
     {
         return true;
     }
@@ -51,7 +51,8 @@ class WorldPay extends PaymentBase
      */
     public function getSupportedCurrencies(): ?array
     {
-        return null;
+        $sCode = appSetting('sSupportedCurrency', 'nails/driver-invoice-worldpay');
+        return $sCode ? [strtoupper($sCode)] : null;
     }
 
     // --------------------------------------------------------------------------
@@ -103,7 +104,7 @@ class WorldPay extends PaymentBase
      * Initiate a payment
      *
      * @param int                  $iAmount      The payment amount
-     * @param string               $sCurrency    The payment currency
+     * @param Currency             $oCurrency    The payment currency
      * @param stdClass             $oData        An array of driver data
      * @param stdClass             $oCustomData  The custom data object
      * @param string               $sDescription The charge description
@@ -117,7 +118,7 @@ class WorldPay extends PaymentBase
      */
     public function charge(
         int $iAmount,
-        string $sCurrency,
+        Currency $oCurrency,
         stdClass $oData,
         stdClass $oCustomData,
         string $sDescription,
@@ -153,15 +154,19 @@ class WorldPay extends PaymentBase
     /**
      * Complete the payment
      *
-     * @param stdClass $oPayment  The Payment object
-     * @param stdClass $oInvoice  The Invoice object
-     * @param array    $aGetVars  Any $_GET variables passed from the redirect flow
-     * @param array    $aPostVars Any $_POST variables passed from the redirect flow
+     * @param Resource\Payment $oPayment  The Payment object
+     * @param Resource\Invoice $oInvoice  The Invoice object
+     * @param array            $aGetVars  Any $_GET variables passed from the redirect flow
+     * @param array            $aPostVars Any $_POST variables passed from the redirect flow
      *
      * @return CompleteResponse
      */
-    public function complete($oPayment, $oInvoice, $aGetVars, $aPostVars): CompleteResponse
-    {
+    public function complete(
+        Resource\Payment $oPayment,
+        Resource\Invoice $oInvoice,
+        array $aGetVars,
+        array $aPostVars
+    ): CompleteResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
         throw new NailsException('Method not implemented');
     }
@@ -171,18 +176,25 @@ class WorldPay extends PaymentBase
     /**
      * Issue a refund for a payment
      *
-     * @param string   $sTxnId      The transaction's ID
-     * @param integer  $iAmount     The amount to refund
-     * @param string   $sCurrency   The currency in which to refund
-     * @param stdClass $oCustomData The custom data object
-     * @param string   $sReason     The refund's reason
-     * @param stdClass $oPayment    The payment object
-     * @param stdClass $oInvoice    The invoice object
+     * @param string           $sTxnId      The transaction's ID
+     * @param int              $iAmount     The amount to refund
+     * @param Currency         $oCurrency   The currency in which to refund
+     * @param stdClass         $oCustomData The custom data object
+     * @param string           $sReason     The refund's reason
+     * @param Resource\Payment $oPayment    The payment object
+     * @param Resource\Invoice $oInvoice    The invoice object
      *
      * @return RefundResponse
      */
-    public function refund($sTxnId, $iAmount, $sCurrency, $oCustomData, $sReason, $oPayment, $oInvoice): RefundResponse
-    {
+    public function refund(
+        string $sTxnId,
+        int $iAmount,
+        Currency $oCurrency,
+        stdClass $oCustomData,
+        string $sReason,
+        Resource\Payment $oPayment,
+        Resource\Invoice $oInvoice
+    ): RefundResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
         throw new NailsException('Method not implemented');
     }
@@ -192,13 +204,13 @@ class WorldPay extends PaymentBase
     /**
      * Creates a new payment source, returns a semi-populated source resource
      *
-     * @param \Nails\Invoice\Resource\Source $oResource The Resouce object to update
-     * @param array                          $aData     Data passed from the caller
+     * @param Resource\Source $oResource The Resouce object to update
+     * @param array           $aData     Data passed from the caller
      *
      * @throws DriverException
      */
     public function createSource(
-        \Nails\Invoice\Resource\Source &$oResource,
+        Resource\Source &$oResource,
         array $aData
     ): void {
         //  @todo (Pablo - 2019-09-05) - implement this

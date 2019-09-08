@@ -66,6 +66,12 @@
                         "max_length": 22
                     },
                     {
+                        "key": "sSupportedCurrency",
+                        "label": "Currency",
+                        "info": "WorldPay accounts only support a single currency, specify it's code here, e.g. GBP, or USD",
+                        "max_length": 3
+                    },
+                    {
                         "legend": "API Keys - Test",
                         "fields": [
                             {
