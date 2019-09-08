@@ -51,14 +51,6 @@
                         "default": "WorldPay"
                     },
                     {
-                        "key": "iLogoId",
-                        "label": "Logo",
-                        "info": "The logo of the provider, as seen by customers",
-                        "default": null,
-                        "type": "image",
-                        "bucket": "nails-driver-invoice-worldpay"
-                    },
-                    {
                         "key": "sStatementDescriptor",
                         "label": "Statement Descriptor",
                         "info": "The text shown on the customer's statement. You can sub in {{INVOICE_REF}} for the invoice reference.",
