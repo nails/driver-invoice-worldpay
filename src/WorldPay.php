@@ -4,7 +4,7 @@
  * WorldPay payment Driver
  *
  * @package     Nails
- * @subpackage  driver-invoice-stripe
+ * @subpackage  driver-invoice-worldpay
  * @category    Driver
  * @author      Nails Dev Team
  * @link
@@ -126,6 +126,7 @@ class WorldPay extends PaymentBase
         Resource\Invoice $oInvoice,
         string $sSuccessUrl,
         string $sErrorUrl,
+        bool $bCustomerPresent,
         Resource\Source $oSource = null
     ): ChargeResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
