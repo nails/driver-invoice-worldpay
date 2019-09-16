@@ -51,14 +51,6 @@
                         "default": "WorldPay"
                     },
                     {
-                        "key": "iLogoId",
-                        "label": "Logo",
-                        "info": "The logo of the provider, as seen by customers",
-                        "default": null,
-                        "type": "image",
-                        "bucket": "nails-driver-invoice-worldpay"
-                    },
-                    {
                         "key": "sStatementDescriptor",
                         "label": "Statement Descriptor",
                         "info": "The text shown on the customer's statement. You can sub in {{INVOICE_REF}} for the invoice reference.",
@@ -66,7 +58,13 @@
                         "max_length": 22
                     },
                     {
-                        "legend": "Test API Keys",
+                        "key": "sSupportedCurrency",
+                        "label": "Currency",
+                        "info": "WorldPay accounts only support a single currency, specify it's code here, e.g. GBP, or USD",
+                        "max_length": 3
+                    },
+                    {
+                        "legend": "API Keys - Test",
                         "fields": [
                             {
                                 "key": "sKeyTestSecret",
@@ -83,7 +81,7 @@
                         ]
                     },
                     {
-                        "legend": "Live API Keys",
+                        "legend": "API Keys - Live",
                         "fields": [
                             {
                                 "key": "sKeyLiveSecret",
