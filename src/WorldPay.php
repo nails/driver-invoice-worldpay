@@ -217,4 +217,58 @@ class WorldPay extends PaymentBase
         //  @todo (Pablo - 2019-09-05) - implement this
         throw new NailsException('Method not implemented');
     }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for creating a new customer on the gateway
+     *
+     * @param array $aData The driver specific customer data
+     */
+    public function createCustomer(array $aData = [])
+    {
+        //  @todo (Pablo - 2019-10-03) - implement this
+        throw new NailsException('Method not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for retrieving an existing customer from the gateway
+     *
+     * @param mixed $mCustomerId The gateway's customer ID
+     * @param array $aData       Any driver specific data
+     */
+    public function getCustomer($mCustomerId, array $aData = [])
+    {
+        //  @todo (Pablo - 2019-10-03) - implement this
+        throw new NailsException('Method not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for updating an existing customer on the gateway
+     *
+     * @param mixed $mCustomerId The gateway's customer ID
+     * @param array $aData       The driver specific customer data
+     */
+    public function updateCustomer($mCustomerId, array $aData = [])
+    {
+        //  @todo (Pablo - 2019-10-03) - implement this
+        throw new NailsException('Method not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Convinience method for deleting an existing customer on the gateway
+     *
+     * @param mixed $mCustomerId The gateway's customer ID
+     */
+    public function deleteCustomer($mCustomerId)
+    {
+        //  @todo (Pablo - 2019-10-03) - implement this
+        throw new NailsException('Method not implemented');
+    }
 }
