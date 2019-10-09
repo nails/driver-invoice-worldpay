@@ -221,6 +221,34 @@ class WorldPay extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
+     * Updates a payment source on the gateway
+     *
+     * @param Resource\Source $oResource The Resource being updated
+     */
+    public function updateSource(
+        Resource\Source $oResource
+    ): void {
+        //  @todo (Pablo - 2019-10-09) - implement this
+        throw new NailsException('Method not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Deletes a payment source from the gateway
+     *
+     * @param Resource\Source $oResource The Resource being deleted
+     */
+    public function deleteSource(
+        Resource\Source $oResource
+    ): void {
+        //  @todo (Pablo - 2019-10-09) - implement this
+        throw new NailsException('Method not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Convinience method for creating a new customer on the gateway
      *
      * @param array $aData The driver specific customer data
