@@ -57,17 +57,44 @@ class WorldPay extends PaymentBase
      */
     public function getSupportedCurrencies(): ?array
     {
-        $sCodes = json_decode(appSetting('sMerchantCodes', 'nails/driver-invoice-worldpay'));
+        $aCodes = json_decode($this->getSetting('sMerchantCodes'));
 
-        if (is_null($sCodes)) {
+        if (is_null($aCodes)) {
             return null;
         }
 
         return array_map(function ($oItem) {
             return strtoupper($oItem->currency);
-        }, $sCodes);
+        }, $aCodes);
+    }
 
-        return $sCode ? [strtoupper($sCode)] : null;
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the associated merchant code for a given currency
+     *
+     * @param Currency $oCurrency The currency to compare
+     *
+     * @return string
+     * @throws DriverException
+     */
+    protected function getMerchantCodeForCurrency(Currency $oCurrency): string
+    {
+        $aCodes = json_decode($this->getSetting('sMerchantCodes'));
+        if (is_array($aCodes)) {
+            foreach ($aCodes as $aCode) {
+                if (strtoupper($aCode->currency) === $oCurrency->code) {
+                    return $aCode->merchant_code;
+                }
+            }
+        }
+
+        throw new DriverException(
+            sprintf(
+                'Unable to ascertain merchant code for currency %s',
+                $oCurrency->code
+            )
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -197,6 +224,9 @@ class WorldPay extends PaymentBase
                             'installationId' => $this->getSetting('sInstallationId'),
                         ]),
                     ]),
+                ], [
+                    'version'      => 1.4,
+                    'merchantCode' => $this->getMerchantCodeForCurrency($oCurrency),
                 ])
             );
 
