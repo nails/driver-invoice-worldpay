@@ -15,12 +15,14 @@ namespace Nails\Invoice\Driver\Payment;
 use Nails\Common\Exception\NailsException;
 use Nails\Currency\Resource\Currency;
 use Nails\Invoice\Driver\PaymentBase;
+use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
 use Nails\Invoice\Resource;
 use stdClass;
+use function foo\func;
 
 /**
  * Class WorldPay
@@ -29,6 +31,10 @@ use stdClass;
  */
 class WorldPay extends PaymentBase
 {
+    const PAYMENT_SOURCES_ERROR = 'Payment Sources are not supported by the WorldPay driver';
+
+    // --------------------------------------------------------------------------
+
     /**
      * Returns whether the driver is available to be used against the selected invoice
      *
@@ -51,7 +57,16 @@ class WorldPay extends PaymentBase
      */
     public function getSupportedCurrencies(): ?array
     {
-        $sCode = appSetting('sSupportedCurrency', 'nails/driver-invoice-worldpay');
+        $sCodes = json_decode(appSetting('sMerchantCodes', 'nails/driver-invoice-worldpay'));
+
+        if (is_null($sCodes)) {
+            return null;
+        }
+
+        return array_map(function ($oItem) {
+            return strtoupper($oItem->currency);
+        }, $sCodes);
+
         return $sCode ? [strtoupper($sCode)] : null;
     }
 
@@ -129,8 +144,141 @@ class WorldPay extends PaymentBase
         bool $bCustomerPresent,
         Resource\Source $oSource = null
     ): ChargeResponse {
+
+        if (!empty($oSource)) {
+            throw new DriverException(
+                static::PAYMENT_SOURCES_ERROR
+            );
+        }
+
+        try {
+
+            $oDoc = $this->createXmlDocument();
+
+            $oDoc->appendChild(
+                $this->createXmlElement($oDoc, 'paymentService', [
+                    $this->createXmlElement($oDoc, 'submit', [
+                        $this->createXmlElement($oDoc, 'order', [
+                            $this->createXmlElement($oDoc, 'description'),
+                            $this->createXmlElement($oDoc, 'amount', '', [
+                                'currencyCode' => $oCurrency->code,
+                                'exponent'     => 2,
+                                'value'        => $iAmount,
+                            ]),
+                            $this->createXmlElement($oDoc, 'orderContent'),
+                            $this->createXmlElement($oDoc, 'paymentMethodMask', [
+                                $this->createXmlElement($oDoc, 'include', '', [
+                                    'code' => 'ALL',
+                                ]),
+                            ]),
+                            $this->createXmlElement($oDoc, 'shopper', [
+                                $this->createXmlElement($oDoc, 'shopperEmailAddress', $oInvoice->customer()->billing_email ?: $oInvoice->customer()->email),
+                            ]),
+                            $this->createXmlElement($oDoc, 'shippingAddress', [
+                                $this->createXmlElement($oDoc, 'address1', $oInvoice->deliveryAddress()->line_1 ?? ''),
+                                $this->createXmlElement($oDoc, 'address2', $oInvoice->deliveryAddress()->line_2 ?? ''),
+                                $this->createXmlElement($oDoc, 'address3', $oInvoice->deliveryAddress()->line_3 ?? ''),
+                                $this->createXmlElement($oDoc, 'postalCode', $oInvoice->deliveryAddress()->postcode ?? ''),
+                                $this->createXmlElement($oDoc, 'city', $oInvoice->deliveryAddress()->town ?? ''),
+                                $this->createXmlElement($oDoc, 'state', $oInvoice->deliveryAddress()->region ?? ''),
+                                $this->createXmlElement($oDoc, 'country', $oInvoice->deliveryAddress()->country->iso ?? ''),
+                            ]),
+                            $this->createXmlElement($oDoc, 'billingAddress', [
+                                $this->createXmlElement($oDoc, 'address1', $oInvoice->billingAddress()->line_1 ?? ''),
+                                $this->createXmlElement($oDoc, 'address2', $oInvoice->billingAddress()->line_2 ?? ''),
+                                $this->createXmlElement($oDoc, 'address3', $oInvoice->billingAddress()->line_3 ?? ''),
+                                $this->createXmlElement($oDoc, 'postalCode', $oInvoice->billingAddress()->postcode ?? ''),
+                                $this->createXmlElement($oDoc, 'city', $oInvoice->billingAddress()->town ?? ''),
+                                $this->createXmlElement($oDoc, 'state', $oInvoice->billingAddress()->region ?? ''),
+                                $this->createXmlElement($oDoc, 'country', $oInvoice->billingAddress()->country->iso ?? ''),
+                            ]),
+                        ], [
+                            'orderCode'      => $oInvoice->ref,
+                            'installationId' => $this->getSetting('sInstallationId'),
+                        ]),
+                    ]),
+                ])
+            );
+
+            dd($oDoc->saveXML());
+
+        } catch (\Exception $e) {
+            throw new DriverException(
+                sprintf(
+                    'Failed to build XML document. [%s] %s – %s',
+                    get_class($e),
+                    $e->getCode(),
+                    $e->getMessage(),
+                )
+            );
+        }
+
         //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Creates a new XML Document
+     *
+     * @return \DOMDocument
+     */
+    protected function createXmlDocument(): \DOMDocument
+    {
+        $oImp = new \DOMImplementation();
+        $oDoc = $oImp->createDocument(
+            'paymentService',
+            null,
+            $oImp->createDocumentType(
+                'paymentService',
+                '-//Worldpay//DTD Worldpay PaymentService v1//EN',
+                'http://dtd.worldpay.com/paymentService_v1.dtd'
+            )
+        );
+
+        $oDoc->xmlVersion         = '1.0';
+        $oDoc->encoding           = 'UTF-8';
+        $oDoc->preserveWhiteSpace = false;
+        $oDoc->formatOutput       = true;
+
+        return $oDoc;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Utility method for creating XML nodes
+     *
+     * @param \DOMDocument         $oXml        The main XML document
+     * @param string               $sNode       The node type
+     * @param string|\DOMElement[] $mValue      The node's value, or array of child nodes
+     * @param string[]             $aAttributes Array of attributes for the node
+     *
+     * @return \DOMElement
+     */
+    protected function createXmlElement(
+        \DOMDocument $oXml,
+        string $sNode,
+        $mValue = '',
+        array $aAttributes = []
+    ): \DOMElement {
+
+        $oNode = $oXml->createElement($sNode);
+
+        if (is_array($mValue)) {
+            foreach ($mValue as $oChild) {
+                $oNode->appendChild($oChild);
+            }
+        } else {
+            $oNode->nodeValue = $mValue;
+        }
+
+        foreach ($aAttributes as $sKey => $sValue) {
+            $oNode->setAttribute($sKey, $sValue);
+        }
+
+        return $oNode;
     }
 
     // --------------------------------------------------------------------------
@@ -147,7 +295,7 @@ class WorldPay extends PaymentBase
     public function sca(ScaResponse $oScaResponse, array $aData, string $sSuccessUrl): ScaResponse
     {
         //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -169,7 +317,7 @@ class WorldPay extends PaymentBase
         array $aPostVars
     ): CompleteResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -197,7 +345,7 @@ class WorldPay extends PaymentBase
         Resource\Invoice $oInvoice
     ): RefundResponse {
         //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -214,8 +362,9 @@ class WorldPay extends PaymentBase
         Resource\Source &$oResource,
         array $aData
     ): void {
-        //  @todo (Pablo - 2019-09-05) - implement this
-        throw new NailsException('Method not implemented');
+        throw new DriverException(
+            static::PAYMENT_SOURCES_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -228,8 +377,9 @@ class WorldPay extends PaymentBase
     public function updateSource(
         Resource\Source $oResource
     ): void {
-        //  @todo (Pablo - 2019-10-09) - implement this
-        throw new NailsException('Method not implemented');
+        throw new DriverException(
+            static::PAYMENT_SOURCES_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -242,8 +392,9 @@ class WorldPay extends PaymentBase
     public function deleteSource(
         Resource\Source $oResource
     ): void {
-        //  @todo (Pablo - 2019-10-09) - implement this
-        throw new NailsException('Method not implemented');
+        throw new DriverException(
+            static::PAYMENT_SOURCES_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -256,7 +407,7 @@ class WorldPay extends PaymentBase
     public function createCustomer(array $aData = [])
     {
         //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -270,7 +421,7 @@ class WorldPay extends PaymentBase
     public function getCustomer($mCustomerId, array $aData = [])
     {
         //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -284,7 +435,7 @@ class WorldPay extends PaymentBase
     public function updateCustomer($mCustomerId, array $aData = [])
     {
         //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 
     // --------------------------------------------------------------------------
@@ -297,6 +448,6 @@ class WorldPay extends PaymentBase
     public function deleteCustomer($mCustomerId)
     {
         //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method not implemented');
+        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
     }
 }
