@@ -392,9 +392,14 @@ class WorldPay extends PaymentBase
         Resource\Source &$oResource,
         array $aData
     ): void {
-        throw new DriverException(
-            static::PAYMENT_SOURCES_ERROR
-        );
+        $sToken = getFromArray('worldpay_token', $aData);
+        if (empty($sToken)) {
+            throw new DriverException('"worldpay_token" must be supplied when creating a WorldPay payment source.');
+        }
+
+        $oResource->data = (object) [
+            'token' => $sToken,
+        ];
     }
 
     // --------------------------------------------------------------------------
