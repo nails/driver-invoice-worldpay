@@ -71,35 +71,6 @@ class WorldPay extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Returns the associated merchant code for a given currency
-     *
-     * @param Currency $oCurrency The currency to compare
-     *
-     * @return string
-     * @throws DriverException
-     */
-    protected function getMerchantCodeForCurrency(Currency $oCurrency): string
-    {
-        $aCodes = json_decode($this->getSetting('sMerchantCodes'));
-        if (is_array($aCodes)) {
-            foreach ($aCodes as $aCode) {
-                if (strtoupper($aCode->currency) === $oCurrency->code) {
-                    return $aCode->merchant_code;
-                }
-            }
-        }
-
-        throw new DriverException(
-            sprintf(
-                'Unable to ascertain merchant code for currency %s',
-                $oCurrency->code
-            )
-        );
-    }
-
-    // --------------------------------------------------------------------------
-
-    /**
      * Returns whether the driver uses a redirect payment flow or not.
      *
      * @return bool
@@ -221,12 +192,12 @@ class WorldPay extends PaymentBase
                             ]),
                         ], [
                             'orderCode'      => $oInvoice->ref,
-                            'installationId' => $this->getSetting('sInstallationId'),
+                            'installationId' => $this->getInstallationId($oCurrency->code, $bCustomerPresent),
                         ]),
                     ]),
                 ], [
                     'version'      => 1.4,
-                    'merchantCode' => $this->getMerchantCodeForCurrency($oCurrency),
+                    'merchantCode' => $this->getMerchantCode($oCurrency->code, $bCustomerPresent),
                 ])
             );
 
@@ -484,5 +455,106 @@ class WorldPay extends PaymentBase
     {
         //  @todo (Pablo - 2019-10-03) - implement this
         throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+    }
+
+    // --------------------------------------------------------------------------
+
+    public function getConfig(): array
+    {
+        return json_decode($this->getSetting('aConfig')) ?? [];
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns a config property for a given currency/customer present combo
+     *
+     * @param string $sProperty
+     * @param string $sCurrency
+     * @param bool   $bCustomerPresent
+     *
+     * @return mixed
+     */
+    protected function getConfigProperty(string $sProperty, string $sCurrency, bool $bCustomerPresent = true)
+    {
+        $aConfig = $this->getConfig();
+        $aConfig = array_filter($aConfig, function (\stdClass $oConfig) use ($sCurrency, $bCustomerPresent) {
+            return $oConfig->for_currency === $sCurrency && $bCustomerPresent === $oConfig->customer_present;
+        });
+
+        $mValue = reset($aConfig)->{$sProperty} ?? null;
+
+        if (empty($mValue)) {
+            throw new DriverException(
+                sprintf(
+                    'Unable to ascertain property `%s` for currency: %s with customer present: %s',
+                    $sProperty,
+                    $sCurrency,
+                    json_encode($bCustomerPresent)
+                )
+            );
+        }
+
+        return $mValue;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the merchant_code for a given currency/customer present combo
+     *
+     * @param string $sCurrency        The currency to query
+     * @param bool   $bCustomerPresent Whether the customer is present
+     *
+     * @return string|null
+     */
+    public function getMerchantCode(string $sCurrency, bool $bCustomerPresent = true): ?string
+    {
+        return (string) $this->getConfigProperty('merchant_code', $sCurrency, $bCustomerPresent) ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the installation_id for a given currency/customer present combo
+     *
+     * @param string $sCurrency        The currency to query
+     * @param bool   $bCustomerPresent Whether the customer is present
+     *
+     * @return int|null
+     */
+    public function getInstallationId(string $sCurrency, bool $bCustomerPresent = true): ?string
+    {
+        return (int) $this->getConfigProperty('installation_id', $sCurrency, $bCustomerPresent) ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the xml_username for a given currency/customer present combo
+     *
+     * @param string $sCurrency        The currency to query
+     * @param bool   $bCustomerPresent Whether the customer is present
+     *
+     * @return string|null
+     */
+    public function getXmlUsername(string $sCurrency, bool $bCustomerPresent = true): ?string
+    {
+        return (string) $this->getConfigProperty('xml_username', $sCurrency, $bCustomerPresent) ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the xml_password for a given currency/customer present combo
+     *
+     * @param string $sCurrency        The currency to query
+     * @param bool   $bCustomerPresent Whether the customer is present
+     *
+     * @return string|null
+     */
+    public function getXmlPassword(string $sCurrency, bool $bCustomerPresent = true): ?string
+    {
+        return (string) $this->getConfigProperty('xml_password', $sCurrency, $bCustomerPresent) ?: null;
     }
 }

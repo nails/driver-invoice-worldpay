@@ -53,14 +53,11 @@
                         "default": "WorldPay"
                     },
                     {
-                        "key": "sInstallationId",
-                        "label": "Installation ID"
-                    },
-                    {
-                        "key": "sMerchantCodes",
-                        "label": "Currency",
+                        "key": "aConfig",
+                        "label": "Config",
                         "type": "textarea",
-                        "info": "JSON array in the format <code>[{\"currency\":\"\",\"merchant_code\":\"\"}]</code>"
+                        "info": "<a href=\"https://github.com/nails/driver-invoice-worldpay#configuration\">Configuration Documentation</a>",
+                        "encrypted": true
                     }
                 ]
             }
