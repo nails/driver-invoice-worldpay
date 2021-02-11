@@ -398,9 +398,7 @@ class WorldPay extends PaymentBase
     public function deleteSource(
         Resource\Source $oResource
     ): void {
-        throw new DriverException(
-            static::PAYMENT_SOURCES_ERROR
-        );
+        //  Nothing to do
     }
 
     // --------------------------------------------------------------------------
