@@ -33,6 +33,7 @@ use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
 use Nails\Invoice\Factory\RefundResponse;
 use Nails\Invoice\Factory\ScaResponse;
+use Nails\Invoice\Model\Payment;
 use Nails\Invoice\Resource;
 use stdClass;
 use function foo\func;
@@ -275,6 +276,9 @@ class WorldPay extends PaymentBase
                     'There was a problem processing your payment, you may wish to try again.'
                 );
         }
+
+        //  Hide sensitive fields
+        $this->obfuscateCvcInPaymentData($oPaymentData, $oPayment);
 
         return $oChargeResponse;
     }
@@ -639,6 +643,31 @@ class WorldPay extends PaymentBase
         }
 
         return $oResponseDoc;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Obfuscates the CVC property in payment data if it's been passed
+     *
+     * @param Resource\Invoice\Data\Payment $oPaymentData The payment data object
+     * @param Resource\Payment              $oPayment     The payment being handled
+     *
+     * @throws FactoryException
+     */
+    private function obfuscateCvcInPaymentData(Resource\Invoice\Data\Payment $oPaymentData, Resource\Payment $oPayment)
+    {
+        if (property_exists($oPaymentData, 'cvc')) {
+
+            /** @var Payment $oPaymentModel */
+            $oPaymentModel = Factory::model('Payment', Constants::MODULE_SLUG);
+
+            $oPaymentData->cvc = str_repeat('*', strlen($oPaymentData->cvc));
+
+            $oPaymentModel->update($oPayment->id, [
+                'custom_data' => $oPaymentData,
+            ]);
+        }
     }
 
     // --------------------------------------------------------------------------
