@@ -12,17 +12,21 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
+use Nails\Address\Resource\Address;
+use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\NailsException;
 use Nails\Common\Factory\HttpRequest\Post;
+use Nails\Common\Resource\DateTime;
 use Nails\Common\Service\HttpCodes;
 use Nails\Common\Service\Input;
 use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Constants;
-use Nails\Invoice\Driver\Payment\Exceptions\Api\AuthenticationException;
-use Nails\Invoice\Driver\Payment\Exceptions\Api\ParseException;
-use Nails\Invoice\Driver\Payment\Exceptions\WorldPayException;
+use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\AuthenticationException;
+use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\ParseException;
+use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\WorldPayException;
+use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Xml\NodeNotFoundException;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
@@ -42,16 +46,23 @@ class WorldPay extends PaymentBase
 {
     const WP_ENDPOINT_TEST      = 'https://secure-test.worldpay.com/jsp/merchant/xml/paymentService.jsp';
     const WP_ENDPOINT_LIVE      = 'https://secure.worldpay.com/jsp/merchant/xml/paymentService.jsp';
-    const PAYMENT_SOURCES_ERROR = 'Payment Sources are not supported by the WorldPay driver';
-    const CUSTOMERS_ERROR       = 'Customers are not supported by the WorldPay driver';
+    const PAYMENT_SOURCES_ERROR = '%s Payment Sources is not supported by the WorldPay driver';
+    const CUSTOMERS_ERROR       = '%s Customers is not supported by the WorldPay driver';
 
     //  Error Codes:
-    //  https://developer.worldpay.com/docs/wpg/directintegration/quickstart#integrate
+    //  https://developer.worldpay.com/docs/wpg/troubleshoot#common-error-codes
     const XML_ERROR_AUTHENTICATION          = 401;
+    const XML_ERROR_GENERAL                 = 1;
     const XML_ERROR_PARSE                   = 2;
+    const XML_ERROR_AMOUNT_INVALID          = 3;
     const XML_ERROR_SECURITY_VIOLATION      = 4;
     const XML_ERROR_INVALID_ORDER_DETAILS   = 5;
+    const XML_ERROR_INVALID_BATCH           = 6;
     const XML_ERROR_INVALID_PAYMENT_DETAILS = 7;
+    const XML_ERROR_SERVICE_UNAVAILABLE     = 8;
+
+    const XML_TRANSACTION_AUTHORISED = 'AUTHORISED';
+    const XML_TRANSACTION_REFUSED    = 'REFUSED';
 
     // --------------------------------------------------------------------------
 
@@ -163,82 +174,171 @@ class WorldPay extends PaymentBase
         Resource\Source $oSource = null
     ): ChargeResponse {
 
-        //  @todo (Pablo 12/02/2021) - handle CVC if passed
-
-        /** @var Input $oInput */
-        $oInput = Factory::service('Input');
         /** @var ChargeResponse $oChargeResponse */
         $oChargeResponse = Factory::factory('ChargeResponse', Constants::MODULE_SLUG);
 
         try {
 
-            $oDoc = $this->createXmlDocument();
+            $oResponseDoc = $this
+                ->makeRequest(
+                    $this->buildChargeXml(
+                        $oInvoice,
+                        $oCurrency,
+                        $iAmount,
+                        $oSource,
+                        $oPayment,
+                        $oPaymentData,
+                        $bCustomerPresent
+                    ),
+                    $oCurrency,
+                    $bCustomerPresent
+                );
 
-            $oDoc->appendChild(
-                $this->createXmlElement($oDoc, 'paymentService', [
-                    $this->createXmlElement($oDoc, 'submit', [
-                        $this->createXmlElement($oDoc, 'order', [
-                            $this->createXmlElement($oDoc, 'description', 'Payment for invoice #' . $oInvoice->ref),
-                            $this->createXmlElement($oDoc, 'amount', '', [
-                                'currencyCode' => $oCurrency->code,
-                                'exponent'     => $oCurrency->decimal_precision,
-                                'value'        => $iAmount,
-                            ]),
-                            $this->createXmlElement($oDoc, 'paymentDetails', [
-                                $this->getPaymentXml($oDoc, $oSource),
-                                $this->createXmlElement($oDoc, 'session', null, [
-                                    'shopperIPAddress' => $oInput->ipAddress(),
-                                ]),
-                            ]),
-                            $this->createXmlElement($oDoc, 'shopper', [
-                                $this->createXmlElement($oDoc, 'shopperEmailAddress', $oInvoice->customer()->billing_email ?: $oInvoice->customer()->email),
-                                $this->createXmlElement($oDoc, 'authenticatedShopperID', $oInvoice->customer()->id),
-                            ]),
-                        ], ['orderCode' => $oPayment->ref]),
-                    ]),
-                ], [
-                    'version'      => 1.4,
-                    'merchantCode' => $this->getMerchantCode($oCurrency->code, $bCustomerPresent),
-                ])
-            );
+            try {
 
-            $oResponseDoc = $this->makeRequest($oDoc, $oCurrency, $bCustomerPresent);
+                /**
+                 * Determine if the transaction was sucessful:
+                 * - No error occured
+                 * - lastEvent is AUTHORISED
+                 */
+                $oLastEventNode = $this->getNodeAtPath(
+                    $oResponseDoc,
+                    'paymentService.reply.orderStatus.payment.lastEvent'
+                );
 
-            dd($oResponseDoc->saveXML());
+                switch ($oLastEventNode->nodeValue) {
+                    case static::XML_TRANSACTION_AUTHORISED:
+                        //  @todo (Pablo 12/02/2021) - calculate the fee charged, if possible
+                        $oChargeResponse
+                            ->setStatusComplete()
+                            ->setTransactionId($oPayment->ref);
+                        break;
 
-            $oChargeResponse
-                ->setStatusComplete()
-                ->setTransactionId($oCharge->id)
-                ->setFee($oBalanceTransaction->fee);
+                    case static::XML_TRANSACTION_REFUSED:
+                        $oChargeResponse
+                            ->setStatusFailed(
+                                'Payment was declined',
+                                static::XML_TRANSACTION_REFUSED,
+                                'Your payment was declined.'
+                            );
+                        break;
+                }
+
+            } catch (NodeNotFoundException $e) {
+
+                /**
+                 * If there's no lastEvent node then attempt to see if there's an error at:
+                 * paymentService.reply.orderStatus.error which will might give some more information
+                 */
+
+                try {
+
+                    $oErrorNode = $this->getNodeAtPath($oResponseDoc, 'paymentService.reply.orderStatus.error');
+                    $sError     = $oErrorNode->nodeValue;
+                    $mCode      = $oErrorNode->attributes->getNamedItem('code')->nodeValue;
+
+                } catch (NodeNotFoundException $e) {
+                }
+
+                $oChargeResponse
+                    ->setStatusFailed(
+                        $sError ?? 'Unknown error',
+                        $mCode ?? null,
+                        'Your payment failed; the response from the payment gateway was incomplete. Please try again.'
+                    );
+            }
 
         } catch (AuthenticationException $e) {
-            $oChargeResponse->setStatusFailed(
-                $e->getMessage(),
-                $e->getCode(),
-                'There is a configuration error preventing your payment from being processed.'
-            );
+            $oChargeResponse
+                ->setStatusFailed(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    'There is a configuration error preventing your payment from being processed.'
+                );
 
         } catch (ParseException $e) {
-            $oChargeResponse->setStatusFailed(
-                $e->getMessage(),
-                $e->getCode(),
-                sprintf(
-                    'There was a problem processing your payment: %s',
-                    $e->getMessage()
-                )
-            );
+            $oChargeResponse
+                ->setStatusFailed(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    sprintf(
+                        'There was a problem processing your payment: %s',
+                        $e->getMessage()
+                    )
+                );
 
         } catch (\Exception $e) {
-            $oChargeResponse->setStatusFailed(
-                $e->getMessage(),
-                $e->getCode(),
-                'There was a problem processing your payment, you may wish to try again.'
-            );
+            $oChargeResponse
+                ->setStatusFailed(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    'There was a problem processing your payment, you may wish to try again.'
+                );
         }
 
-        dd($oChargeResponse);
-
         return $oChargeResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Builds the XML for making a charge
+     *
+     * @param Resource\Invoice $oInvoice
+     * @param Currency         $oCurrency
+     * @param int              $iAmount
+     * @param Resource\Source  $oSource
+     * @param Resource\Payment $oPayment
+     * @param PaymentData      $oPaymentData
+     * @param bool             $bCustomerPresent
+     *
+     * @return \DOMDocument
+     * @throws FactoryException
+     * @throws \Nails\Common\Exception\ModelException
+     */
+    private function buildChargeXml(
+        Resource\Invoice $oInvoice,
+        Currency $oCurrency,
+        int $iAmount,
+        Resource\Source $oSource,
+        Resource\Payment $oPayment,
+        Resource\Invoice\Data\Payment $oPaymentData,
+        bool $bCustomerPresent
+    ): \DOMDocument {
+
+        /** @var Input $oInput */
+        $oInput = Factory::service('Input');
+        $oDoc   = $this->createXmlDocument();
+
+        $oDoc->appendChild(
+            $this->createXmlElement($oDoc, 'paymentService', [
+                $this->createXmlElement($oDoc, 'submit', [
+                    $this->createXmlElement($oDoc, 'order', [
+                        $this->createXmlElement($oDoc, 'description', 'Payment for invoice #' . $oInvoice->ref),
+                        $this->createXmlElement($oDoc, 'amount', '', [
+                            'currencyCode' => $oCurrency->code,
+                            'exponent'     => $oCurrency->decimal_precision,
+                            'value'        => $iAmount,
+                        ]),
+                        $this->createXmlElement($oDoc, 'paymentDetails', [
+                            $this->getPaymentXml($oDoc, $oSource, $oPaymentData),
+                            $this->createXmlElement($oDoc, 'session', null, [
+                                'shopperIPAddress' => $oInput->ipAddress(),
+                            ]),
+                        ]),
+                        $this->createXmlElement($oDoc, 'shopper', [
+                            $this->createXmlElement($oDoc, 'shopperEmailAddress', $oInvoice->customer()->billing_email ?: $oInvoice->customer()->email),
+                            $this->createXmlElement($oDoc, 'authenticatedShopperID', $oInvoice->customer()->id),
+                        ]),
+                    ], ['orderCode' => $oPayment->ref]),
+                ]),
+            ], [
+                'version'      => 1.4,
+                'merchantCode' => $this->getMerchantCode($oCurrency->code, $bCustomerPresent),
+            ])
+        );
+
+        return $oDoc;
     }
 
     // --------------------------------------------------------------------------
@@ -248,37 +348,99 @@ class WorldPay extends PaymentBase
      *
      * @param \DOMDocument    $oDoc
      * @param Resource\Source $oSource
+     * @param PaymentData     $oPaymentData
      *
      * @return \DOMElement
      */
-    private function getPaymentXml(\DOMDocument $oDoc, Resource\Source $oSource): \DOMElement
-    {
-        if ($oSource) {
-            return $this->createXmlElement($oDoc, 'TOKEN-SSL', [
-                $this->createXmlElement($oDoc, 'paymentTokenID', $oSource->data->token),
-                $this->createXmlElement($oDoc, 'paymentInstrument', [
-                    $this->createXmlElement($oDoc, 'cardDetails', [
-                        $this->createXmlElement($oDoc, 'cardHolderName', 'REFUSED'),
+    private function getPaymentXml(
+        \DOMDocument $oDoc,
+        Resource\Source $oSource,
+        Resource\Invoice\Data\Payment $oPaymentData
+    ): \DOMElement {
+
+        if ($oSource || property_exists('worldpay_token', $oPaymentData)) {
+
+            //  Support paying with a token passed as a payment source, or as payment data
+            $sPaymentToken = $oPaymentData->worldpay_token ?? $oSource->data->token;
+
+            $aOverrides = [];
+            if (property_exists($oPaymentData, 'cvc')) {
+                $aOverrides[] = $this->createXmlElement($oDoc, 'cvc', $oPaymentData->cvc);
+            }
+
+            if (property_exists($oPaymentData, 'cardHolderName')) {
+                $aOverrides[] = $this->createXmlElement($oDoc, 'cardHolderName', $oPaymentData->cardHolderName);
+            }
+
+            if (property_exists($oPaymentData, 'expiryDate')) {
+
+                if ($oPaymentData->expiryDate instanceof \Datetime) {
+                    $oDate = $oPaymentData->expiryDate;
+
+                } elseif ($oPaymentData->expiryDate instanceof DateTime) {
+                    $oDate = $oPaymentData->expiryDate->getDateTimeObject();
+
+                } elseif (is_string($oPaymentData->expiryDate)) {
+                    $oDate = $this->parseDateString($oPaymentData->expiryDate);
+                }
+
+                if (!empty($oDate)) {
+                    $aOverrides[] = $this->createXmlElement($oDoc, 'expiryDate', [
+                        $this->createXmlElement($oDoc, 'date', null, [
+                            'month' => $oDate->format('m'),
+                            'year'  => $oDate->format('Y'),
+                        ]),
+                    ]);
+                }
+            }
+
+            if (property_exists($oPaymentData, 'cardAddress') && $oPaymentData->cardAddress instanceof Address) {
+                $aOverrides[] = $this->createXmlElement($oDoc, 'cardAddress', [
+                    $this->createXmlElement($oDoc, 'address', [
+                        $this->createXmlElement($oDoc, 'address1', $oPaymentData->cardAddress->line_1),
+                        $this->createXmlElement($oDoc, 'address2', $oPaymentData->cardAddress->line_2),
+                        $this->createXmlElement($oDoc, 'address3', $oPaymentData->cardAddress->line_3),
+                        $this->createXmlElement($oDoc, 'postalCode', $oPaymentData->cardAddress->postcode),
+                        $this->createXmlElement($oDoc, 'city', $oPaymentData->cardAddress->town),
+                        $this->createXmlElement($oDoc, 'state', $oPaymentData->cardAddress->region),
+                        $this->createXmlElement($oDoc, 'countryCode', $oPaymentData->cardAddress->country->iso),
                     ]),
-                ]),
-            ], ['tokenScope' => 'shopper']);
+                ]);
+            }
+
+            if (!empty($aOverrides)) {
+                $oPaymentInstrument = $this->createXmlElement($oDoc, 'paymentInstrument', [
+                    $this->createXmlElement($oDoc, 'cardDetails', $aOverrides),
+                ]);
+            }
+
+            return $this->createXmlElement($oDoc, 'TOKEN-SSL', array_filter([
+                $this->createXmlElement($oDoc, 'paymentTokenID', $sPaymentToken),
+                $oPaymentInstrument ?? null,
+            ]), ['tokenScope' => 'shopper']);
 
         } else {
-            //  @todo (Pablo 12/02/2021) - populate values
-            return $this->createXmlElement($oDoc, 'CARD-SSL', [
-                $this->createXmlElement($oDoc, 'cardNumber'),
-                $this->createXmlElement($oDoc, 'expiryDate'),
-                $this->createXmlElement($oDoc, 'cardHolderName'),
-                $this->createXmlElement($oDoc, 'cardAddress', [
-                    $this->createXmlElement($oDoc, 'address1'),
-                    $this->createXmlElement($oDoc, 'address2'),
-                    $this->createXmlElement($oDoc, 'address3'),
-                    $this->createXmlElement($oDoc, 'postalCode'),
-                    $this->createXmlElement($oDoc, 'city'),
-                    $this->createXmlElement($oDoc, 'state'),
-                    $this->createXmlElement($oDoc, 'countryCode'),
-                ]),
-            ]);
+            throw new DriverException(
+                'Must provide a payment source, or `worldpay_token`.'
+            );
+        }
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Safely parse a datetime string
+     *
+     * @param string $sDate
+     *
+     * @return \DateTime|null
+     */
+    private function parseDateString(string $sDate)
+    {
+        try {
+            return new \DateTime($sDate);
+        } catch (\Exception $e) {
+            return null;
         }
     }
 
@@ -348,15 +510,23 @@ class WorldPay extends PaymentBase
 
     // --------------------------------------------------------------------------
 
+    /**
+     * Returns the node at a given path in an XML document using dot notation
+     *
+     * @param \DOMDocument $oDoc  The document to inspect
+     * @param string       $sPath The path to retrieve
+     *
+     * @return \DOMElement
+     * @throws NodeNotFoundException
+     */
     private function getNodeAtPath(\DOMDocument $oDoc, string $sPath): \DOMElement
     {
-        dd($oDoc->saveXML());
         $aPath     = explode('.', $sPath);
         $sRootNode = array_shift($aPath);
 
         $oRootNode = $oDoc->getElementsByTagName($sRootNode)->item(0);
         if (empty($oRootNode)) {
-            throw new DriverException('Failed to parse XML path; missing root node "' . $sRootNode . '"');
+            throw new NodeNotFoundException('Failed to parse XML path; missing root node "' . $sRootNode . '"');
         }
 
         $aCurrentPath  = [$sRootNode];
@@ -375,7 +545,7 @@ class WorldPay extends PaymentBase
             }
 
             if (empty($oCurrentNode)) {
-                throw new DriverException(sprintf(
+                throw new NodeNotFoundException(sprintf(
                     'Failed to parse XML path; missing node at path "%s"',
                     implode('.', $aCurrentPath)
                 ));
@@ -387,6 +557,22 @@ class WorldPay extends PaymentBase
         return $oPreviousNode;
     }
 
+    // --------------------------------------------------------------------------
+
+    /**
+     * Performs the API Request to the WP endpoint
+     *
+     * @param \DOMDocument $oDoc             The XML document to send
+     * @param Currency     $oCurrency        The currency being processed
+     * @param bool         $bCustomerPresent Whether the customer is present or not
+     *
+     * @return \DOMDocument
+     * @throws AuthenticationException
+     * @throws DriverException
+     * @throws ParseException
+     * @throws WorldPayException
+     * @throws FactoryException
+     */
     private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent): \DOMDocument
     {
         /** @var Post $oHttpPost */
@@ -399,8 +585,8 @@ class WorldPay extends PaymentBase
 
             )
             ->auth(
-                $this->getXmlUsername($oCurrency->code, $bCustomerPresent) . 'test',
-                $this->getXmlPassword($oCurrency->code, $bCustomerPresent) . 'test'
+                $this->getXmlUsername($oCurrency->code, $bCustomerPresent),
+                $this->getXmlPassword($oCurrency->code, $bCustomerPresent)
             )
             ->setHeader('Content-Type', 'text/xml')
             ->body($oDoc->saveXML(), false);
@@ -409,12 +595,14 @@ class WorldPay extends PaymentBase
 
         if ($oHttpResponse->getStatusCode() !== HttpCodes::STATUS_OK) {
             throw new WorldPayException(
-                HttpCodes::getByCode($oHttpResponse->getStatusCode()),
+                sprintf(
+                    'Recieved a non-200 response from WorldPay API: [%s] %s',
+                    $oHttpResponse->getStatusCode(),
+                    HttpCodes::getByCode($oHttpResponse->getStatusCode())
+                ),
                 $oHttpResponse->getStatusCode()
             );
         }
-
-        //  @todo (Pablo 12/02/2021) - handle non-200
 
         $oResponseDoc = $this->createXmlDocument();
         $oResponseDoc->loadXML($oHttpResponse->getBody(false));
@@ -438,7 +626,6 @@ class WorldPay extends PaymentBase
                         $oErrorNode->nodeValue,
                         $oErrorNode->attributes->getNamedItem('code')->nodeValue
                     );
-                    break;
 
                 default:
                     throw new DriverException(
@@ -447,45 +634,8 @@ class WorldPay extends PaymentBase
                     );
             }
 
-        } catch (\Exception $e) {
+        } catch (NodeNotFoundException $e) {
             //  No error node detected
-        }
-
-        $oPaymentServiceNode = $oResponseDoc->getElementsByTagName('paymentService')->item(0);
-        if (empty($oPaymentServiceNode)) {
-            throw new DriverException('Failed to parse response from WorldPay; missing paymentService node');
-        }
-
-        $oReplyNode = $oPaymentServiceNode->childNodes->item(0);
-        if (empty($oReplyNode) || $oReplyNode->tagName !== 'reply') {
-            throw new DriverException('Failed to parse response from WorldPay; missing reply node');
-        }
-
-        $oErrorNode = $oReplyNode->childNodes->item(0);
-        if (!empty($oErrorNode) && $oErrorNode->tagName === 'error') {
-
-            switch ($oErrorNode->attributes->getNamedItem('code')->nodeValue) {
-                case '401':
-                case '5':
-                    throw new AuthenticationException(
-                        'Incorrect credentials supplied',
-                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
-                    );
-
-                case '2':
-                case '7':
-                    throw new ParseException(
-                        $oErrorNode->nodeValue,
-                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
-                    );
-                    break;
-
-                default:
-                    throw new DriverException(
-                        $oErrorNode->nodeValue,
-                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
-                    );
-            }
         }
 
         return $oResponseDoc;
@@ -593,7 +743,7 @@ class WorldPay extends PaymentBase
         Resource\Source $oResource
     ): void {
         throw new DriverException(
-            static::PAYMENT_SOURCES_ERROR
+            sprintf(static::PAYMENT_SOURCES_ERROR, 'Updating')
         );
     }
 
@@ -622,7 +772,7 @@ class WorldPay extends PaymentBase
     public function createCustomer(array $aData = [])
     {
         throw new DriverException(
-            static::CUSTOMERS_ERROR
+            sprintf(static::CUSTOMERS_ERROR, 'Creating')
         );
     }
 
@@ -639,7 +789,7 @@ class WorldPay extends PaymentBase
     public function getCustomer($mCustomerId, array $aData = [])
     {
         throw new DriverException(
-            static::CUSTOMERS_ERROR
+            sprintf(static::CUSTOMERS_ERROR, 'Fetching')
         );
     }
 
@@ -656,7 +806,7 @@ class WorldPay extends PaymentBase
     public function updateCustomer($mCustomerId, array $aData = [])
     {
         throw new DriverException(
-            static::CUSTOMERS_ERROR
+            sprintf(static::CUSTOMERS_ERROR, 'Updating')
         );
     }
 
@@ -672,7 +822,7 @@ class WorldPay extends PaymentBase
     public function deleteCustomer($mCustomerId)
     {
         throw new DriverException(
-            static::CUSTOMERS_ERROR
+            sprintf(static::CUSTOMERS_ERROR, 'Deleting')
         );
     }
 
