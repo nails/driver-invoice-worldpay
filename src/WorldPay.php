@@ -13,7 +13,16 @@
 namespace Nails\Invoice\Driver\Payment;
 
 use Nails\Common\Exception\NailsException;
+use Nails\Common\Factory\HttpRequest\Post;
+use Nails\Common\Service\HttpCodes;
+use Nails\Common\Service\Input;
 use Nails\Currency\Resource\Currency;
+use Nails\Environment;
+use Nails\Factory;
+use Nails\Invoice\Constants;
+use Nails\Invoice\Driver\Payment\Exceptions\Api\AuthenticationException;
+use Nails\Invoice\Driver\Payment\Exceptions\Api\ParseException;
+use Nails\Invoice\Driver\Payment\Exceptions\WorldPayException;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
@@ -31,7 +40,18 @@ use function foo\func;
  */
 class WorldPay extends PaymentBase
 {
+    const WP_ENDPOINT_TEST      = 'https://secure-test.worldpay.com/jsp/merchant/xml/paymentService.jsp';
+    const WP_ENDPOINT_LIVE      = 'https://secure.worldpay.com/jsp/merchant/xml/paymentService.jsp';
     const PAYMENT_SOURCES_ERROR = 'Payment Sources are not supported by the WorldPay driver';
+    const CUSTOMERS_ERROR       = 'Customers are not supported by the WorldPay driver';
+
+    //  Error Codes:
+    //  https://developer.worldpay.com/docs/wpg/directintegration/quickstart#integrate
+    const XML_ERROR_AUTHENTICATION          = 401;
+    const XML_ERROR_PARSE                   = 2;
+    const XML_ERROR_SECURITY_VIOLATION      = 4;
+    const XML_ERROR_INVALID_ORDER_DETAILS   = 5;
+    const XML_ERROR_INVALID_PAYMENT_DETAILS = 7;
 
     // --------------------------------------------------------------------------
 
@@ -143,11 +163,12 @@ class WorldPay extends PaymentBase
         Resource\Source $oSource = null
     ): ChargeResponse {
 
-        if (!empty($oSource)) {
-            throw new DriverException(
-                static::PAYMENT_SOURCES_ERROR
-            );
-        }
+        //  @todo (Pablo 12/02/2021) - handle CVC if passed
+
+        /** @var Input $oInput */
+        $oInput = Factory::service('Input');
+        /** @var ChargeResponse $oChargeResponse */
+        $oChargeResponse = Factory::factory('ChargeResponse', Constants::MODULE_SLUG);
 
         try {
 
@@ -157,43 +178,23 @@ class WorldPay extends PaymentBase
                 $this->createXmlElement($oDoc, 'paymentService', [
                     $this->createXmlElement($oDoc, 'submit', [
                         $this->createXmlElement($oDoc, 'order', [
-                            $this->createXmlElement($oDoc, 'description'),
+                            $this->createXmlElement($oDoc, 'description', 'Payment for invoice #' . $oInvoice->ref),
                             $this->createXmlElement($oDoc, 'amount', '', [
                                 'currencyCode' => $oCurrency->code,
-                                'exponent'     => 2,
+                                'exponent'     => $oCurrency->decimal_precision,
                                 'value'        => $iAmount,
                             ]),
-                            $this->createXmlElement($oDoc, 'orderContent'),
-                            $this->createXmlElement($oDoc, 'paymentMethodMask', [
-                                $this->createXmlElement($oDoc, 'include', '', [
-                                    'code' => 'ALL',
+                            $this->createXmlElement($oDoc, 'paymentDetails', [
+                                $this->getPaymentXml($oDoc, $oSource),
+                                $this->createXmlElement($oDoc, 'session', null, [
+                                    'shopperIPAddress' => $oInput->ipAddress(),
                                 ]),
                             ]),
                             $this->createXmlElement($oDoc, 'shopper', [
                                 $this->createXmlElement($oDoc, 'shopperEmailAddress', $oInvoice->customer()->billing_email ?: $oInvoice->customer()->email),
+                                $this->createXmlElement($oDoc, 'authenticatedShopperID', $oInvoice->customer()->id),
                             ]),
-                            $this->createXmlElement($oDoc, 'shippingAddress', [
-                                $this->createXmlElement($oDoc, 'address1', $oInvoice->deliveryAddress()->line_1 ?? ''),
-                                $this->createXmlElement($oDoc, 'address2', $oInvoice->deliveryAddress()->line_2 ?? ''),
-                                $this->createXmlElement($oDoc, 'address3', $oInvoice->deliveryAddress()->line_3 ?? ''),
-                                $this->createXmlElement($oDoc, 'postalCode', $oInvoice->deliveryAddress()->postcode ?? ''),
-                                $this->createXmlElement($oDoc, 'city', $oInvoice->deliveryAddress()->town ?? ''),
-                                $this->createXmlElement($oDoc, 'state', $oInvoice->deliveryAddress()->region ?? ''),
-                                $this->createXmlElement($oDoc, 'country', $oInvoice->deliveryAddress()->country->iso ?? ''),
-                            ]),
-                            $this->createXmlElement($oDoc, 'billingAddress', [
-                                $this->createXmlElement($oDoc, 'address1', $oInvoice->billingAddress()->line_1 ?? ''),
-                                $this->createXmlElement($oDoc, 'address2', $oInvoice->billingAddress()->line_2 ?? ''),
-                                $this->createXmlElement($oDoc, 'address3', $oInvoice->billingAddress()->line_3 ?? ''),
-                                $this->createXmlElement($oDoc, 'postalCode', $oInvoice->billingAddress()->postcode ?? ''),
-                                $this->createXmlElement($oDoc, 'city', $oInvoice->billingAddress()->town ?? ''),
-                                $this->createXmlElement($oDoc, 'state', $oInvoice->billingAddress()->region ?? ''),
-                                $this->createXmlElement($oDoc, 'country', $oInvoice->billingAddress()->country->iso ?? ''),
-                            ]),
-                        ], [
-                            'orderCode'      => $oInvoice->ref,
-                            'installationId' => $this->getInstallationId($oCurrency->code, $bCustomerPresent),
-                        ]),
+                        ], ['orderCode' => $oPayment->ref]),
                     ]),
                 ], [
                     'version'      => 1.4,
@@ -201,21 +202,84 @@ class WorldPay extends PaymentBase
                 ])
             );
 
-            dd($oDoc->saveXML());
+            $oResponseDoc = $this->makeRequest($oDoc, $oCurrency, $bCustomerPresent);
+
+            dd($oResponseDoc->saveXML());
+
+            $oChargeResponse
+                ->setStatusComplete()
+                ->setTransactionId($oCharge->id)
+                ->setFee($oBalanceTransaction->fee);
+
+        } catch (AuthenticationException $e) {
+            $oChargeResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                'There is a configuration error preventing your payment from being processed.'
+            );
+
+        } catch (ParseException $e) {
+            $oChargeResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                sprintf(
+                    'There was a problem processing your payment: %s',
+                    $e->getMessage()
+                )
+            );
 
         } catch (\Exception $e) {
-            throw new DriverException(
-                sprintf(
-                    'Failed to build XML document. [%s] %s – %s',
-                    get_class($e),
-                    $e->getCode(),
-                    $e->getMessage(),
-                )
+            $oChargeResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode(),
+                'There was a problem processing your payment, you may wish to try again.'
             );
         }
 
-        //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        dd($oChargeResponse);
+
+        return $oChargeResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the appropriate payment XML depending on whetehr a token or card details have been supplied
+     *
+     * @param \DOMDocument    $oDoc
+     * @param Resource\Source $oSource
+     *
+     * @return \DOMElement
+     */
+    private function getPaymentXml(\DOMDocument $oDoc, Resource\Source $oSource): \DOMElement
+    {
+        if ($oSource) {
+            return $this->createXmlElement($oDoc, 'TOKEN-SSL', [
+                $this->createXmlElement($oDoc, 'paymentTokenID', $oSource->data->token),
+                $this->createXmlElement($oDoc, 'paymentInstrument', [
+                    $this->createXmlElement($oDoc, 'cardDetails', [
+                        $this->createXmlElement($oDoc, 'cardHolderName', 'REFUSED'),
+                    ]),
+                ]),
+            ], ['tokenScope' => 'shopper']);
+
+        } else {
+            //  @todo (Pablo 12/02/2021) - populate values
+            return $this->createXmlElement($oDoc, 'CARD-SSL', [
+                $this->createXmlElement($oDoc, 'cardNumber'),
+                $this->createXmlElement($oDoc, 'expiryDate'),
+                $this->createXmlElement($oDoc, 'cardHolderName'),
+                $this->createXmlElement($oDoc, 'cardAddress', [
+                    $this->createXmlElement($oDoc, 'address1'),
+                    $this->createXmlElement($oDoc, 'address2'),
+                    $this->createXmlElement($oDoc, 'address3'),
+                    $this->createXmlElement($oDoc, 'postalCode'),
+                    $this->createXmlElement($oDoc, 'city'),
+                    $this->createXmlElement($oDoc, 'state'),
+                    $this->createXmlElement($oDoc, 'countryCode'),
+                ]),
+            ]);
+        }
     }
 
     // --------------------------------------------------------------------------
@@ -280,6 +344,151 @@ class WorldPay extends PaymentBase
         }
 
         return $oNode;
+    }
+
+    // --------------------------------------------------------------------------
+
+    private function getNodeAtPath(\DOMDocument $oDoc, string $sPath): \DOMElement
+    {
+        dd($oDoc->saveXML());
+        $aPath     = explode('.', $sPath);
+        $sRootNode = array_shift($aPath);
+
+        $oRootNode = $oDoc->getElementsByTagName($sRootNode)->item(0);
+        if (empty($oRootNode)) {
+            throw new DriverException('Failed to parse XML path; missing root node "' . $sRootNode . '"');
+        }
+
+        $aCurrentPath  = [$sRootNode];
+        $oPreviousNode = $oRootNode;
+
+        foreach ($aPath as $sNodeName) {
+
+            $aCurrentPath[] = $sNodeName;
+            $oCurrentNode   = null;
+
+            foreach ($oPreviousNode->childNodes as $oChildNode) {
+                if ($oChildNode->tagName === $sNodeName) {
+                    $oCurrentNode = $oChildNode;
+                    break;
+                }
+            }
+
+            if (empty($oCurrentNode)) {
+                throw new DriverException(sprintf(
+                    'Failed to parse XML path; missing node at path "%s"',
+                    implode('.', $aCurrentPath)
+                ));
+            }
+
+            $oPreviousNode = $oCurrentNode;
+        }
+
+        return $oPreviousNode;
+    }
+
+    private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent): \DOMDocument
+    {
+        /** @var Post $oHttpPost */
+        $oHttpPost = Factory::factory('HttpRequestPost');
+        $oHttpPost
+            ->baseUri(
+                Environment::is(Environment::ENV_PROD)
+                    ? \Nails\Invoice\Driver\Payment\WorldPay::WP_ENDPOINT_LIVE
+                    : \Nails\Invoice\Driver\Payment\WorldPay::WP_ENDPOINT_TEST
+
+            )
+            ->auth(
+                $this->getXmlUsername($oCurrency->code, $bCustomerPresent) . 'test',
+                $this->getXmlPassword($oCurrency->code, $bCustomerPresent) . 'test'
+            )
+            ->setHeader('Content-Type', 'text/xml')
+            ->body($oDoc->saveXML(), false);
+
+        $oHttpResponse = $oHttpPost->execute();
+
+        if ($oHttpResponse->getStatusCode() !== HttpCodes::STATUS_OK) {
+            throw new WorldPayException(
+                HttpCodes::getByCode($oHttpResponse->getStatusCode()),
+                $oHttpResponse->getStatusCode()
+            );
+        }
+
+        //  @todo (Pablo 12/02/2021) - handle non-200
+
+        $oResponseDoc = $this->createXmlDocument();
+        $oResponseDoc->loadXML($oHttpResponse->getBody(false));
+
+        try {
+
+            $oErrorNode = $this->getNodeAtPath($oResponseDoc, 'paymentService.reply.error');
+
+            switch ((int) $oErrorNode->attributes->getNamedItem('code')->nodeValue) {
+                case static::XML_ERROR_AUTHENTICATION:
+                case static::XML_ERROR_SECURITY_VIOLATION:
+                    throw new AuthenticationException(
+                        'Incorrect credentials supplied',
+                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
+                    );
+
+                case static::XML_ERROR_PARSE:
+                case static::XML_ERROR_INVALID_ORDER_DETAILS:
+                case static::XML_ERROR_INVALID_PAYMENT_DETAILS:
+                    throw new ParseException(
+                        $oErrorNode->nodeValue,
+                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
+                    );
+                    break;
+
+                default:
+                    throw new DriverException(
+                        $oErrorNode->nodeValue,
+                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
+                    );
+            }
+
+        } catch (\Exception $e) {
+            //  No error node detected
+        }
+
+        $oPaymentServiceNode = $oResponseDoc->getElementsByTagName('paymentService')->item(0);
+        if (empty($oPaymentServiceNode)) {
+            throw new DriverException('Failed to parse response from WorldPay; missing paymentService node');
+        }
+
+        $oReplyNode = $oPaymentServiceNode->childNodes->item(0);
+        if (empty($oReplyNode) || $oReplyNode->tagName !== 'reply') {
+            throw new DriverException('Failed to parse response from WorldPay; missing reply node');
+        }
+
+        $oErrorNode = $oReplyNode->childNodes->item(0);
+        if (!empty($oErrorNode) && $oErrorNode->tagName === 'error') {
+
+            switch ($oErrorNode->attributes->getNamedItem('code')->nodeValue) {
+                case '401':
+                case '5':
+                    throw new AuthenticationException(
+                        'Incorrect credentials supplied',
+                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
+                    );
+
+                case '2':
+                case '7':
+                    throw new ParseException(
+                        $oErrorNode->nodeValue,
+                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
+                    );
+                    break;
+
+                default:
+                    throw new DriverException(
+                        $oErrorNode->nodeValue,
+                        $oErrorNode->attributes->getNamedItem('code')->nodeValue
+                    );
+            }
+        }
+
+        return $oResponseDoc;
     }
 
     // --------------------------------------------------------------------------
@@ -407,11 +616,14 @@ class WorldPay extends PaymentBase
      * Convinience method for creating a new customer on the gateway
      *
      * @param array $aData The driver specific customer data
+     *
+     * @throws DriverException
      */
     public function createCustomer(array $aData = [])
     {
-        //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        throw new DriverException(
+            static::CUSTOMERS_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -421,11 +633,14 @@ class WorldPay extends PaymentBase
      *
      * @param mixed $mCustomerId The gateway's customer ID
      * @param array $aData       Any driver specific data
+     *
+     * @throws DriverException
      */
     public function getCustomer($mCustomerId, array $aData = [])
     {
-        //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        throw new DriverException(
+            static::CUSTOMERS_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -435,11 +650,14 @@ class WorldPay extends PaymentBase
      *
      * @param mixed $mCustomerId The gateway's customer ID
      * @param array $aData       The driver specific customer data
+     *
+     * @throws DriverException
      */
     public function updateCustomer($mCustomerId, array $aData = [])
     {
-        //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        throw new DriverException(
+            static::CUSTOMERS_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
@@ -448,15 +666,23 @@ class WorldPay extends PaymentBase
      * Convinience method for deleting an existing customer on the gateway
      *
      * @param mixed $mCustomerId The gateway's customer ID
+     *
+     * @throws DriverException
      */
     public function deleteCustomer($mCustomerId)
     {
-        //  @todo (Pablo - 2019-10-03) - implement this
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        throw new DriverException(
+            static::CUSTOMERS_ERROR
+        );
     }
 
     // --------------------------------------------------------------------------
 
+    /**
+     * Returns the decoded config array
+     *
+     * @return array
+     */
     public function getConfig(): array
     {
         return json_decode($this->getSetting('aConfig')) ?? [];
