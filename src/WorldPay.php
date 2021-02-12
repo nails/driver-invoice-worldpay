@@ -36,7 +36,6 @@ use Nails\Invoice\Factory\ScaResponse;
 use Nails\Invoice\Model\Payment;
 use Nails\Invoice\Resource;
 use stdClass;
-use function foo\func;
 
 /**
  * Class WorldPay
