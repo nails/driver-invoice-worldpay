@@ -366,14 +366,17 @@ class WorldPay extends PaymentBase
             //  Support paying with a token passed as a payment source, or as payment data
             $sPaymentToken = $oPaymentData->worldpay_token ?? $oSource->data->token;
 
-            $aOverrides = [];
-            if (property_exists($oPaymentData, 'cvc')) {
-                $aOverrides[] = $this->createXmlElement($oDoc, 'cvc', $oPaymentData->cvc);
-            }
+            /**
+             * Allow values to be overridden at payment time. The order of these elements
+             * is important, WorldPay will complain if they are received in the wrong order:
+             *
+             * 1. expiryDate
+             * 2. cardHolderName
+             * 3. cvc
+             * 4. cardAddress
+             */
 
-            if (property_exists($oPaymentData, 'cardHolderName')) {
-                $aOverrides[] = $this->createXmlElement($oDoc, 'cardHolderName', $oPaymentData->cardHolderName);
-            }
+            $aOverrides = [];
 
             if (property_exists($oPaymentData, 'expiryDate')) {
 
@@ -395,6 +398,14 @@ class WorldPay extends PaymentBase
                         ]),
                     ]);
                 }
+            }
+
+            if (property_exists($oPaymentData, 'cardHolderName')) {
+                $aOverrides[] = $this->createXmlElement($oDoc, 'cardHolderName', $oPaymentData->cardHolderName);
+            }
+
+            if (property_exists($oPaymentData, 'cvc')) {
+                $aOverrides[] = $this->createXmlElement($oDoc, 'cvc', $oPaymentData->cvc);
             }
 
             if (property_exists($oPaymentData, 'cardAddress') && $oPaymentData->cardAddress instanceof Address) {
