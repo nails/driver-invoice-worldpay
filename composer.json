@@ -22,7 +22,7 @@
     "require":
     {
         "nails/module-invoice": "dev-develop",
-        "worldpay/worldpay-lib-php": "~2.1.2"
+        "firebase/php-jwt": "^5.2"
     },
     "require-dev":
     {
@@ -58,6 +58,26 @@
                         "type": "textarea",
                         "info": "<a href=\"https://github.com/nails/driver-invoice-worldpay#configuration\">Configuration Documentation</a>",
                         "encrypted": true
+                    },
+                    {
+                        "legend": "3DS Flex - JWT",
+                        "fields": [
+                            {
+                                "key": "s3dsFlexJwtIss",
+                                "label": "Issuer",
+                                "info": "An identifier for who is issuing the JWT."
+                            },
+                            {
+                                "key": "s3dsFlexJwtOrdUnitId",
+                                "label": "Organisational Unit ID",
+                                "info": "An identity associated with your account."
+                            },
+                            {
+                                "key": "s3dsFlexJwtMacKey",
+                                "label": "MAC Key",
+                                "info": "The MAC key for signing the JWT."
+                            }
+                        ]
                     }
                 ]
             }

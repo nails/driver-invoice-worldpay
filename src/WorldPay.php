@@ -23,6 +23,7 @@ use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Constants;
+use Nails\Invoice\Driver\Payment\WorldPay\Ddc;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\AuthenticationException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\ParseException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\WorldPayException;
@@ -969,5 +970,22 @@ class WorldPay extends PaymentBase
     public function getXmlPassword(string $sCurrency, bool $bCustomerPresent = true): ?string
     {
         return (string) $this->getConfigProperty('xml_password', $sCurrency, $bCustomerPresent) ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns a new DDC object for handling 3DS Flex
+     *
+     * @return Ddc
+     */
+    public function ddc(string $sToken): Ddc
+    {
+        return new Ddc(
+            $sToken,
+            $this->getSetting('s3dsFlexJwtIss'),
+            $this->getSetting('s3dsFlexJwtOrdUnitId'),
+            $this->getSetting('s3dsFlexJwtMacKey'),
+        );
     }
 }
