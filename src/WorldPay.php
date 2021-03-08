@@ -856,9 +856,7 @@ class WorldPay extends PaymentBase
                         'paymentService.reply.orderStatus.payment.lastEvent'
                     );
 
-                    d($oLastEventNode->nodeValue, $oScaResponse->getStatus());
                     $this->processLastEvent($oLastEventNode->nodeValue, $oScaResponse, $oScaData->getPayment());
-                    d($oScaResponse->getStatus());
 
                 } catch (NodeNotFoundException $e) {
                     $oScaResponse
