@@ -12,6 +12,7 @@
 
 namespace Nails\Invoice\Driver\Payment;
 
+use Firebase\JWT\JWT;
 use Nails\Address\Resource\Address;
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\NailsException;
@@ -19,6 +20,7 @@ use Nails\Common\Factory\HttpRequest\Post;
 use Nails\Common\Resource\DateTime;
 use Nails\Common\Service\HttpCodes;
 use Nails\Common\Service\Input;
+use Nails\Config;
 use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
@@ -28,12 +30,16 @@ use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\AuthenticationException
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\ParseException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\WorldPayException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Xml\NodeNotFoundException;
+use Nails\Invoice\Driver\Payment\WorldPay\Sca;
 use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
+use Nails\Invoice\Factory\Invoice\PaymentData;
 use Nails\Invoice\Factory\RefundResponse;
+use Nails\Invoice\Factory\ResponseBase;
 use Nails\Invoice\Factory\ScaResponse;
+use Nails\Invoice\Model\Invoice;
 use Nails\Invoice\Model\Payment;
 use Nails\Invoice\Resource;
 use stdClass;
@@ -64,6 +70,7 @@ class WorldPay extends PaymentBase
 
     const XML_TRANSACTION_AUTHORISED = 'AUTHORISED';
     const XML_TRANSACTION_REFUSED    = 'REFUSED';
+    const XML_TRANSACTION_ERROR      = 'ERROR';
 
     // --------------------------------------------------------------------------
 
@@ -89,15 +96,14 @@ class WorldPay extends PaymentBase
      */
     public function getSupportedCurrencies(): ?array
     {
-        $aCodes = json_decode($this->getSetting('sMerchantCodes'));
-
-        if (is_null($aCodes)) {
+        $aConfig = $this->getConfig();
+        if (is_null($aConfig)) {
             return null;
         }
 
         return array_map(function ($oItem) {
-            return strtoupper($oItem->currency);
-        }, $aCodes);
+            return strtoupper($oItem->for_currency);
+        }, $aConfig);
     }
 
     // --------------------------------------------------------------------------
@@ -178,6 +184,78 @@ class WorldPay extends PaymentBase
         /** @var ChargeResponse $oChargeResponse */
         $oChargeResponse = Factory::factory('ChargeResponse', Constants::MODULE_SLUG);
 
+        if (!empty($oPaymentData->ddc_session_id)) {
+            $this
+                ->chargeHandle3ds(
+                    $oChargeResponse,
+                    $iAmount,
+                    $oCurrency,
+                    $oPaymentData,
+                    $oPayment,
+                    $oInvoice,
+                    $bCustomerPresent,
+                    $oSource
+                );
+
+        } else {
+            $this
+                ->chargeHandleCharge(
+                    $oChargeResponse,
+                    $iAmount,
+                    $oCurrency,
+                    $oPaymentData,
+                    $oPayment,
+                    $oInvoice,
+                    $bCustomerPresent,
+                    $oSource
+                );
+        }
+
+        //  Hide sensitive fields
+        $this->obfuscateCvcInPaymentData($oPaymentData, $oPayment);
+
+        return $oChargeResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    protected function chargeHandle3ds(
+        ChargeResponse $oChargeResponse,
+        int $iAmount,
+        Currency $oCurrency,
+        Resource\Invoice\Data\Payment $oPaymentData,
+        Resource\Payment $oPayment,
+        Resource\Invoice $oInvoice,
+        bool $bCustomerPresent,
+        Resource\Source $oSource = null
+    ): void {
+
+        $oScaData = new WorldPay\Sca\Data(
+            $oInvoice,
+            $oCurrency,
+            $iAmount,
+            $oSource,
+            $oPayment,
+            clone $oPaymentData, // Clone allows CVC data (if supplied) to persist
+            $bCustomerPresent
+        );
+
+        $oChargeResponse
+            ->setIsSca($oScaData->toArray());
+    }
+
+    // --------------------------------------------------------------------------
+
+    protected function chargeHandleCharge(
+        ChargeResponse $oChargeResponse,
+        int $iAmount,
+        Currency $oCurrency,
+        Resource\Invoice\Data\Payment $oPaymentData,
+        Resource\Payment $oPayment,
+        Resource\Invoice $oInvoice,
+        bool $bCustomerPresent,
+        Resource\Source $oSource = null
+    ): void {
         try {
 
             $oResponseDoc = $this
@@ -207,23 +285,7 @@ class WorldPay extends PaymentBase
                     'paymentService.reply.orderStatus.payment.lastEvent'
                 );
 
-                switch ($oLastEventNode->nodeValue) {
-                    case static::XML_TRANSACTION_AUTHORISED:
-                        //  @todo (Pablo 12/02/2021) - calculate the fee charged, if possible
-                        $oChargeResponse
-                            ->setStatusComplete()
-                            ->setTransactionId($oPayment->ref);
-                        break;
-
-                    case static::XML_TRANSACTION_REFUSED:
-                        $oChargeResponse
-                            ->setStatusFailed(
-                                'Payment was declined',
-                                static::XML_TRANSACTION_REFUSED,
-                                'Your payment was declined.'
-                            );
-                        break;
-                }
+                $this->processLastEvent($oLastEventNode->nodeValue, $oChargeResponse, $oPayment);
 
             } catch (NodeNotFoundException $e) {
 
@@ -276,11 +338,6 @@ class WorldPay extends PaymentBase
                     'There was a problem processing your payment, you may wish to try again.'
                 );
         }
-
-        //  Hide sensitive fields
-        $this->obfuscateCvcInPaymentData($oPaymentData, $oPayment);
-
-        return $oChargeResponse;
     }
 
     // --------------------------------------------------------------------------
@@ -456,6 +513,43 @@ class WorldPay extends PaymentBase
             return new \DateTime($sDate);
         } catch (\Exception $e) {
             return null;
+        }
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * @param string                     $sLastEvent
+     * @param ChargeResponse|ScaResponse $oResponse
+     * @param Resource\Payment           $oPayment
+     */
+    protected function processLastEvent(string $sLastEvent, ResponseBase $oResponse, Resource\Payment $oPayment)
+    {
+        switch ($sLastEvent) {
+            case static::XML_TRANSACTION_AUTHORISED:
+                //  @todo (Pablo 12/02/2021) - calculate the fee charged, if possible
+                $oResponse
+                    ->setStatusComplete()
+                    ->setTransactionId($oPayment->ref);
+                break;
+
+            case static::XML_TRANSACTION_REFUSED:
+                $oResponse
+                    ->setStatusFailed(
+                        'Payment was declined',
+                        static::XML_TRANSACTION_REFUSED,
+                        'Your payment was declined.'
+                    );
+                break;
+
+            case static::XML_TRANSACTION_ERROR:
+                $oResponse
+                    ->setStatusFailed(
+                        'An error occurred',
+                        static::XML_TRANSACTION_REFUSED,
+                        'An error occurred, you have not been charged.'
+                    );
+                break;
         }
     }
 
@@ -694,8 +788,93 @@ class WorldPay extends PaymentBase
      */
     public function sca(ScaResponse $oScaResponse, array $aData, string $sSuccessUrl): ScaResponse
     {
-        //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        try {
+
+            $oScaData = Sca\Data::buildFromDataArray($aData);
+
+            $oRequestDoc = $this->buildChargeXml(
+                $oScaData->getInvoice(),
+                $oScaData->getCurrency(),
+                $oScaData->getAmount(),
+                $oScaData->getSource(),
+                $oScaData->getPayment(),
+                $oScaData->getPaymentData(),
+                $oScaData->isCustomerPresent(),
+            );
+
+            //  Add 3DS data
+            $oOrderNode = $this->getNodeAtPath($oRequestDoc, 'paymentService.submit.order');
+
+            //  Add riskData node to reduce likelihood of challenge
+            //  @todo (Pablo 08/03/2021) - add authenticationRiskData node
+            //  @todo (Pablo 08/03/2021) - add shopperAccountRiskData node
+            //  @todo (Pablo 08/03/2021) - add transactionRiskData node
+
+            //  Add additional3DSData node
+            $oOrderNode
+                ->appendChild(
+                    $this->createXmlElement($oRequestDoc, 'additional3DSData', null, [
+                        'dfReferenceId'       => $oScaData->getPaymentData()->ddc_session_id,
+                        'challengeWindowSize' => 'fullPage',
+                        //'challengePreference' => 'noPreference',
+                        'challengePreference' => 'challengeMandated',
+                    ])
+                );
+            $oResponseDoc = $this->makeRequest(
+                $oRequestDoc,
+                $oScaData->getCurrency(),
+                $oScaData->isCustomerPresent()
+            );
+
+            try {
+
+                $oChallengeNode = $this->getNodeAtPath(
+                    $oResponseDoc,
+                    'paymentService.reply.orderStatus.challengeRequired.threeDSChallengeDetails'
+                );
+
+                //  @todo (Pablo 08/03/2021) - Handle challenge request
+
+                dd(
+                    '[CHALLENGE REQUIRED]',
+                    'REQUEST DOC',
+                    htmlentities($oRequestDoc->saveXML()),
+                    'RESPONSE DOC',
+                    htmlentities($oResponseDoc->saveXML())
+                );
+
+            } catch (NodeNotFoundException $e) {
+
+                /**
+                 * No challenge is required; check the lastEvent to ensure that
+                 * the payment was successful.
+                 */
+                try {
+
+                    $oLastEventNode = $this->getNodeAtPath(
+                        $oResponseDoc,
+                        'paymentService.reply.orderStatus.payment.lastEvent'
+                    );
+
+                    d($oLastEventNode->nodeValue, $oScaResponse->getStatus());
+                    $this->processLastEvent($oLastEventNode->nodeValue, $oScaResponse, $oScaData->getPayment());
+                    d($oScaResponse->getStatus());
+
+                } catch (NodeNotFoundException $e) {
+                    $oScaResponse
+                        ->setStatusFailed(
+                            'An error occurred, `paymentService.reply.orderStatus.payment.lastEvent` node not found',
+                            static::XML_TRANSACTION_REFUSED,
+                            'An error occurred.'
+                        );
+                }
+            }
+
+        } catch (\Exception $e) {
+            $oScaResponse->setStatusFailed($e->getMessage());
+        }
+
+        return $oScaResponse;
     }
 
     // --------------------------------------------------------------------------

@@ -94,6 +94,7 @@ class Ddc
             [
                 'jti'       => uniqid(),
                 'iat'       => time(),
+                'exp'       => time() + 7200, // Two hours
                 'iss'       => $this->sIssuer,
                 'OrgUnitId' => $this->sOrgUnitId,
             ],
