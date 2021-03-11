@@ -124,9 +124,8 @@ class Ddc
             </head>
             <body>
                 <form id="$sId" method="POST" action="$sUrl">
-                    <input type="text" name="Bin" value="$sBin" />
-                    <input type="text" name="JWT" value="$sJwt" />
-                    <input type="submit">
+                    <input type="hidden" name="Bin" value="$sBin" />
+                    <input type="hidden" name="JWT" value="$sJwt" />
                 </form>
                 <script>
                 window.onload = function() {
