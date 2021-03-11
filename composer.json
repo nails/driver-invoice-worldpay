@@ -68,7 +68,7 @@
                                 "info": "An identifier for who is issuing the JWT."
                             },
                             {
-                                "key": "s3dsFlexJwtOrdUnitId",
+                                "key": "s3dsFlexJwtOrgUnitId",
                                 "label": "Organisational Unit ID",
                                 "info": "An identity associated with your account."
                             },

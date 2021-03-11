@@ -1161,7 +1161,7 @@ class WorldPay extends PaymentBase
         return new Ddc(
             $sToken,
             $this->getSetting('s3dsFlexJwtIss'),
-            $this->getSetting('s3dsFlexJwtOrdUnitId'),
+            $this->getSetting('s3dsFlexJwtOrgUnitId'),
             $this->getSetting('s3dsFlexJwtMacKey'),
         );
     }
