@@ -918,9 +918,9 @@ class WorldPay extends PaymentBase
             );
 
             $oScaResponse
-                ->setIsRedirectWithPost(true)
-                ->setRedirectWithPostUrl($oThreeDSChallenge::getUrl())
-                ->setRedirectWithPostData([
+                ->setIsRedirect(true)
+                ->setRedirectUrl($oThreeDSChallenge::getUrl())
+                ->setRedirectPostData([
                     'JWT' => $oThreeDSChallenge->getJwt(),
                     'MD'  => $this->extracEncryptedMachineCookie($oResponseDoc),
                 ]);
