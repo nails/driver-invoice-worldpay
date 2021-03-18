@@ -638,13 +638,13 @@ class WorldPay extends PaymentBase
     /**
      * Returns the node at a given path in an XML document using dot notation
      *
-     * @param \DOMDocument $oDoc  The document to inspect
-     * @param string       $sPath The path to retrieve
+     * @param \DOMDocument|\DOMElement $oDoc  The document to inspect
+     * @param string                   $sPath The path to retrieve
      *
      * @return \DOMElement
      * @throws NodeNotFoundException
      */
-    private function getNodeAtPath(\DOMDocument $oDoc, string $sPath): \DOMElement
+    private function getNodeAtPath($oDoc, string $sPath): \DOMElement
     {
         $aPath     = explode('.', $sPath);
         $sRootNode = array_shift($aPath);
@@ -698,7 +698,7 @@ class WorldPay extends PaymentBase
      * @throws WorldPayException
      * @throws FactoryException
      */
-    private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent, string $sMachineCookie = null): \DOMDocument
+    private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent = true, string $sMachineCookie = null): \DOMDocument
     {
         /** @var Post $oHttpPost */
         $oHttpPost = Factory::factory('HttpRequestPost');
@@ -1344,5 +1344,109 @@ class WorldPay extends PaymentBase
             $this->getSetting('s3dsFlexJwtOrgUnitId'),
             $this->getSetting('s3dsFlexJwtMacKey'),
         );
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Lists stored tokens on WorldPay for a given Customer ID
+     *
+     * @param Resource\Customer $oCustomer The customer to query
+     * @param Currency          $oCurrency The currency to use for the request (affects merchant code choice)
+     *
+     * @return array
+     * @throws AuthenticationException
+     * @throws DriverException
+     * @throws FactoryException
+     * @throws NodeNotFoundException
+     * @throws ParseException
+     * @throws WorldPayException
+     */
+    public function listTokens(Resource\Customer $oCustomer, Currency $oCurrency): array
+    {
+        $oRequestDoc = $this->createXmlDocument();
+        $oRequestDoc->appendChild(
+            $this->createXmlElement($oRequestDoc, 'paymentService', [
+                $this->createXmlElement($oRequestDoc, 'inquiry', [
+                    $this->createXmlElement($oRequestDoc, 'shopperTokenRetrieval', [
+                        $this->createXmlElement($oRequestDoc, 'authenticatedShopperID', $oCustomer->id),
+                    ]),
+                ]),
+            ], [
+                'version'      => static::PAYMENT_SERVICE_VERSION,
+                'merchantCode' => $this->getMerchantCode($oCurrency->code),
+            ])
+        );
+
+        $oResponseDoc = $this->makeRequest($oRequestDoc, $oCurrency);
+
+        $aTokens    = [];
+        $oReplyNode = $this->getNodeAtPath($oResponseDoc, 'paymentService.reply');
+
+        /** @var \DOMElement $oChildNode */
+        foreach ($oReplyNode->childNodes as $oChildNode) {
+            if ($oChildNode->tagName === 'token') {
+
+                $oTokenIdNode = $this->getNodeAtPath($oChildNode, 'tokenDetails.paymentTokenID');
+                $oExpireNode  = $this->getNodeAtPath($oChildNode, 'tokenDetails.paymentTokenExpiry.date');
+
+                $aTokens[] = (object) [
+                    'id'      => $oTokenIdNode->nodeValue,
+                    'expires' => Factory::resource('DateTime', null, [
+                        'raw' => sprintf(
+                            '%s-%s-%s %s:%s:%s',
+                            $oExpireNode->attributes->getNamedItem('year')->nodeValue,
+                            $oExpireNode->attributes->getNamedItem('month')->nodeValue,
+                            $oExpireNode->attributes->getNamedItem('dayOfMonth')->nodeValue,
+                            $oExpireNode->attributes->getNamedItem('hour')->nodeValue,
+                            $oExpireNode->attributes->getNamedItem('minute')->nodeValue,
+                            $oExpireNode->attributes->getNamedItem('second')->nodeValue,
+                        ),
+                    ]),
+                ];
+            }
+        }
+
+        return $aTokens;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Deletes a WorldPay token
+     *
+     * @param string            $sTokenId  The token to delete
+     * @param Resource\Customer $oCustomer The customer the token belongs to
+     * @param Currency          $oCurrency The currency to use for the request (affects merchant code choice)
+     *
+     * @throws AuthenticationException
+     * @throws DriverException
+     * @throws FactoryException
+     * @throws ParseException
+     * @throws WorldPayException
+     */
+    public function deleteToken(string $sTokenId, Resource\Customer $oCustomer, Currency $oCurrency)
+    {
+        /** @var \DateTime $oNow */
+        $oNow        = Factory::factory('DateTime');
+        $oRequestDoc = $this->createXmlDocument();
+        $oRequestDoc->appendChild(
+            $this->createXmlElement($oRequestDoc, 'paymentService', [
+                $this->createXmlElement($oRequestDoc, 'modify', [
+                    $this->createXmlElement($oRequestDoc, 'paymentTokenDelete', [
+                        $this->createXmlElement($oRequestDoc, 'paymentTokenID', $sTokenId),
+                        $this->createXmlElement($oRequestDoc, 'authenticatedShopperID', $oCustomer->id),
+                        $this->createXmlElement($oRequestDoc, 'tokenReason', 'Deleted by application ' . $oNow->format('Y-m-d H:i:s')),
+                    ], [
+                        'tokenScope' => 'shopper',
+                    ]),
+                ]),
+            ], [
+                'version'      => static::PAYMENT_SERVICE_VERSION,
+                'merchantCode' => $this->getMerchantCode($oCurrency->code),
+            ])
+        );
+
+        $oResponseDoc = $this->makeRequest($oRequestDoc, $oCurrency);
     }
 }
