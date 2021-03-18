@@ -403,8 +403,8 @@ class WorldPay extends PaymentBase
                             $this->createXmlElement($oDoc, 'shopperEmailAddress', $oInvoice->customer()->billing_email ?: $oInvoice->customer()->email),
                             $this->createXmlElement($oDoc, 'authenticatedShopperID', $oInvoice->customer()->id),
                             $this->createXmlElement($oDoc, 'browser', [
-                                $this->createXmlElement($oDoc, 'acceptHeader', 'text/html'),
-                                $this->createXmlElement($oDoc, 'userAgentHeader', 'Nails'),
+                                $this->createXmlElement($oDoc, 'acceptHeader', $oInput->server('HTTP_ACCEPT')),
+                                $this->createXmlElement($oDoc, 'userAgentHeader', $oInput->server('HTTP_USER_AGENT')),
                             ]),
                         ]),
                     ], ['orderCode' => $oPayment->ref]),
