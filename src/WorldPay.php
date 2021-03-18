@@ -904,18 +904,9 @@ class WorldPay extends PaymentBase
                 $this->getSetting('s3dsFlexJwtIss'),
                 $this->getSetting('s3dsFlexJwtOrgUnitId'),
                 current_url(),
-                $this->getNodeAtPath(
-                    $oResponseDoc,
-                    'paymentService.reply.orderStatus.challengeRequired.threeDSChallengeDetails.acsURL'
-                )->nodeValue,
-                $this->getNodeAtPath(
-                    $oResponseDoc,
-                    'paymentService.reply.orderStatus.challengeRequired.threeDSChallengeDetails.payload'
-                )->nodeValue,
-                $this->getNodeAtPath(
-                    $oResponseDoc,
-                    'paymentService.reply.orderStatus.challengeRequired.threeDSChallengeDetails.transactionId3DS'
-                )->nodeValue,
+                $this->getNodeAtPath($oChallengeNode,'acsURL')->nodeValue,
+                $this->getNodeAtPath($oChallengeNode,'payload')->nodeValue,
+                $this->getNodeAtPath($oChallengeNode,'transactionId3DS')->nodeValue,
                 $this->getSetting('s3dsFlexJwtMacKey')
             );
 
