@@ -831,7 +831,10 @@ class WorldPay extends PaymentBase
             }
 
         } catch (\Exception $e) {
-            $oScaResponse->setStatusFailed($e->getMessage());
+            $oScaResponse->setStatusFailed(
+                $e->getMessage(),
+                $e->getCode()
+            );
         }
 
         return $oScaResponse;
