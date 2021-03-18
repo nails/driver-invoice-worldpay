@@ -1034,6 +1034,9 @@ class WorldPay extends PaymentBase
                     static::REQUEST_ERROR_OTHER
                 );
         }
+
+        //  Hide sensitive fields
+        $this->obfuscateCvcInPaymentData($oScaData->getPaymentData(), $oScaData->getPayment());
     }
 
     // --------------------------------------------------------------------------
