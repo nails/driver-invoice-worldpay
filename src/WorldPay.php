@@ -883,8 +883,7 @@ class WorldPay extends PaymentBase
                 $this->createXmlElement($oRequestDoc, 'additional3DSData', null, [
                     'dfReferenceId'       => $oScaData->getPaymentData()->ddc_session_id,
                     'challengeWindowSize' => 'fullPage',
-                    //'challengePreference' => 'noPreference',
-                    'challengePreference' => 'challengeMandated',
+                    'challengePreference' => 'noPreference',
                 ])
             );
 
