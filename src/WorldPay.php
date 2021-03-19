@@ -1263,7 +1263,17 @@ class WorldPay extends PaymentBase
     public function deleteSource(
         Resource\Source $oResource
     ): void {
-        //  Nothing to do
+
+        /** @var \Nails\Currency\Service\Currency $oCurrencyService */
+        $oCurrencyService = Factory::service('Currency', \Nails\Currency\Constants::MODULE_SLUG);
+        $sCurrency        = reset($this->getSupportedCurrencies());
+        $oCurrency        = $oCurrencyService->getByIsoCode($sCurrency);
+
+        $this->deleteToken(
+            $oResource->data->token,
+            $oResource->customer(),
+            $oCurrency
+        );
     }
 
     // --------------------------------------------------------------------------
