@@ -92,11 +92,13 @@ class WorldPay extends PaymentBase
     const XML_TRANSACTION_ERROR      = 'ERROR';
 
     /**
-     * User facing error messages for request exceptions
+     * User facing error messages for  request exceptions
      */
-    const REQUEST_ERROR_AUTH  = 'There is a configuration error preventing your payment from being processed.';
-    const REQUEST_ERROR_PARSE = 'There was a problem processing your payment: %s';
-    const REQUEST_ERROR_OTHER = 'There was a problem processing your payment, you may wish to try again.';
+    const REQUEST_ERROR_AUTH          = 'There is a configuration error preventing your payment from being processed.';
+    const REQUEST_PAYMENT_ERROR_PARSE = 'There was a problem processing your payment: %s';
+    const REQUEST_PAYMENT_ERROR_OTHER = 'There was a problem processing your payment, you may wish to try again.';
+    const REQUEST_REFUND_ERROR_PARSE  = 'There was a problem processing your refund: %s';
+    const REQUEST_REFUND_ERROR_OTHER  = 'There was a problem processing your refund, you may wish to try again.';
 
     /**
      * Other error messages
@@ -334,7 +336,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     $e->getMessage(),
                     $e->getCode(),
-                    sprintf(static::REQUEST_ERROR_PARSE, $e->getMessage())
+                    sprintf(static::REQUEST_PAYMENT_ERROR_PARSE, $e->getMessage())
                 );
 
         } catch (\Exception $e) {
@@ -342,7 +344,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     $e->getMessage(),
                     $e->getCode(),
-                    static::REQUEST_ERROR_OTHER
+                    static::REQUEST_PAYMENT_ERROR_OTHER
                 );
         }
     }
@@ -579,7 +581,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     'An error occurred, `paymentService.reply.orderStatus.payment.lastEvent` node not found',
                     static::XML_TRANSACTION_REFUSED,
-                    static::REQUEST_ERROR_OTHER
+                    static::REQUEST_PAYMENT_ERROR_OTHER
                 );
         }
     }
@@ -1023,7 +1025,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     $e->getMessage(),
                     $e->getCode(),
-                    sprintf(static::REQUEST_ERROR_PARSE, $e->getMessage())
+                    sprintf(static::REQUEST_PAYMENT_ERROR_PARSE, $e->getMessage())
                 );
 
         } catch (\Exception $e) {
@@ -1031,7 +1033,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     $e->getMessage(),
                     $e->getCode(),
-                    static::REQUEST_ERROR_OTHER
+                    static::REQUEST_PAYMENT_ERROR_OTHER
                 );
         }
 
@@ -1105,7 +1107,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     $e->getMessage(),
                     $e->getCode(),
-                    sprintf(static::REQUEST_ERROR_PARSE, $e->getMessage())
+                    sprintf(static::REQUEST_PAYMENT_ERROR_PARSE, $e->getMessage())
                 );
 
         } catch (\Exception $e) {
@@ -1113,7 +1115,7 @@ class WorldPay extends PaymentBase
                 ->setStatusFailed(
                     $e->getMessage(),
                     $e->getCode(),
-                    static::REQUEST_ERROR_OTHER
+                    static::REQUEST_PAYMENT_ERROR_OTHER
                 );
         }
     }
@@ -1208,10 +1210,90 @@ class WorldPay extends PaymentBase
         Resource\Invoice\Data\Payment $oPaymentData,
         string $sReason,
         Resource\Payment $oPayment,
+        Resource\Refund $oRefund,
         Resource\Invoice $oInvoice
     ): RefundResponse {
-        //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+
+        /** @var RefundResponse $oRefundResponse */
+        $oRefundResponse = Factory::factory('RefundResponse', Constants::MODULE_SLUG);
+
+        try {
+
+            $oRequest = $this->createXmlDocument();
+            $oRequest->appendChild(
+                $this->createXmlElement($oRequest, 'paymentService', [
+                    $this->createXmlElement($oRequest, 'modify', [
+                        $this->createXmlElement($oRequest, 'orderModification', [
+                            $this->createXmlElement($oRequest, 'refund', [
+                                $this->createXmlElement($oRequest, 'amount', null, [
+                                    'value'        => $iAmount,
+                                    'currencyCode' => $oCurrency->code,
+                                    'exponent'     => $oCurrency->decimal_precision,
+                                ]),
+                            ], [
+                                'reference' => $oRefund->ref,
+                            ]),
+                        ], [
+                            'orderCode' => $oPayment->ref,
+                        ]),
+                    ]),
+                ], [
+                    'version'      => static::PAYMENT_SERVICE_VERSION,
+                    'merchantCode' => $this->getMerchantCode($oCurrency->code),
+                ])
+            );
+
+            $oResponse = $this->makeRequest($oRequest, $oCurrency);
+
+            try {
+
+                $oRefundReceivedNode = $this->getNodeAtPath(
+                    $oResponse,
+                    'paymentService.reply.ok.refundReceived'
+                );
+
+                $oRefundResponse
+                    ->setStatusComplete(
+                        'An error occurred, `paymentService.reply.ok.refundReceived` node not found',
+                        null,
+                        static::REQUEST_REFUND_ERROR_OTHER
+                    );
+
+            } catch (NodeNotFoundException $e) {
+                $oRefundResponse
+                    ->setStatusFailed(
+                        'An error occurred, `paymentService.reply.ok.refundReceived` node not found',
+                        null,
+                        static::REQUEST_REFUND_ERROR_OTHER
+                    );
+            }
+
+        } catch (AuthenticationException $e) {
+            $oRefundResponse
+                ->setStatusFailed(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    static::REQUEST_ERROR_AUTH
+                );
+
+        } catch (ParseException $e) {
+            $oRefundResponse
+                ->setStatusFailed(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    sprintf(static::REQUEST_REFUND_ERROR_PARSE, $e->getMessage())
+                );
+
+        } catch (\Exception $e) {
+            $oRefundResponse
+                ->setStatusFailed(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    static::REQUEST_REFUND_ERROR_OTHER
+                );
+        }
+
+        return $oRefundResponse;
     }
 
     // --------------------------------------------------------------------------
