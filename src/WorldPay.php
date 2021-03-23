@@ -1253,6 +1253,7 @@ class WorldPay extends PaymentBase
                 );
 
                 $oRefundResponse
+                    ->setTransactionId($oRefund->ref)
                     ->setStatusComplete(
                         'An error occurred, `paymentService.reply.ok.refundReceived` node not found',
                         null,
