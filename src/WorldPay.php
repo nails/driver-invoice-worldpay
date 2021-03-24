@@ -551,7 +551,6 @@ class WorldPay extends PaymentBase
 
             switch ($oLastEventNode->nodeValue) {
                 case static::XML_TRANSACTION_AUTHORISED:
-                    //  @todo (Pablo 12/02/2021) - calculate the fee charged, if possible
                     $oResponse
                         ->setStatusComplete()
                         ->setTransactionId($oPayment->ref);
