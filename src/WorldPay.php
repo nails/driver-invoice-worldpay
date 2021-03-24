@@ -1184,8 +1184,10 @@ class WorldPay extends PaymentBase
         array $aGetVars,
         array $aPostVars
     ): CompleteResponse {
-        //  @todo (Pablo - 2019-07-24) - Implement this method
-        throw new NailsException('Method ' . __METHOD__ . ' not implemented');
+        /** @var CompleteResponse $oCompleteResponse */
+        $oCompleteResponse = Factory::factory('CompleteResponse', Invoice\Constants::MODULE_SLUG);
+        $oCompleteResponse->setStatusComplete();
+        return $oCompleteResponse;
     }
 
     // --------------------------------------------------------------------------
