@@ -92,7 +92,7 @@ class WorldPay extends PaymentBase
     const XML_TRANSACTION_ERROR      = 'ERROR';
 
     /**
-     * User facing error messages for  request exceptions
+     * User facing error messages for request exceptions
      */
     const REQUEST_ERROR_AUTH          = 'There is a configuration error preventing your payment from being processed.';
     const REQUEST_PAYMENT_ERROR_PARSE = 'There was a problem processing your payment: %s';
@@ -560,9 +560,9 @@ class WorldPay extends PaymentBase
                 case static::XML_TRANSACTION_REFUSED:
                     $oResponse
                         ->setStatusFailed(
-                            'Payment was declined',
+                            'Card was declined',
                             static::XML_TRANSACTION_REFUSED,
-                            'Your payment was declined.'
+                            'Your card was declined.'
                         );
                     break;
 
