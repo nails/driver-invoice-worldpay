@@ -395,10 +395,10 @@ class WorldPay extends PaymentBase
                         ]),
                         $this->createXmlElement($oDoc, 'paymentDetails', [
                             $this->getPaymentXml($oDoc, $oSource, $oPaymentData),
-                            $this->createXmlElement($oDoc, 'session', null, [
+                            $this->createXmlElement($oDoc, 'session', null, array_filter([
                                 'shopperIPAddress' => $oInput->ipAddress(),
                                 'id'               => $oSession->getId(),
-                            ]),
+                            ])),
                         ]),
                         $this->createXmlElement($oDoc, 'shopper', [
                             $this->createXmlElement($oDoc, 'shopperEmailAddress', $oInvoice->customer()->billing_email ?: $oInvoice->customer()->email),
