@@ -1,11 +1,18 @@
 {
     "name": "nails/driver-invoice-worldpay",
-    "keywords": ["Nails", "Shed Collective", "CodeIgniter", "Invoice Module", "Payments", "Driver", "WorldPay"],
+    "keywords": [
+        "Nails",
+        "Shed Collective",
+        "CodeIgniter",
+        "Invoice Module",
+        "Payments",
+        "Driver",
+        "WorldPay"
+    ],
     "homepage": "http://nailsapp.co.uk/modules/invoice/driver/worldpay",
     "description": "This is the \"WorldPay\" driver for the Nails Invoice module.",
     "license": "MIT",
-    "authors":
-    [
+    "authors": [
         {
             "name": "Pablo de la Pena",
             "email": "p@nailsapp.co.uk",
@@ -13,73 +20,34 @@
             "role": "Developer"
         }
     ],
-    "support":
-    {
+    "support": {
         "email": "hello@nailsapp.co.uk"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
-    "require":
-    {
+    "require": {
         "nails/module-invoice": "dev-develop",
         "firebase/php-jwt": "^5.2"
     },
-    "require-dev":
-    {
+    "require-dev": {
         "phpunit/phpunit": "7.*"
     },
-    "autoload":
-    {
+    "autoload": {
         "psr-4": {
+            "Nails\\Invoice\\Driver\\Payment\\": "src/",
             "Nails\\Invoice\\Driver\\Payment\\WorldPay\\": "src/"
         }
     },
-    "extra":
-    {
-        "nails" :
-        {
+    "extra": {
+        "nails": {
             "name": "WorldPay",
             "type": "driver",
             "subType": "payment",
             "forModule": "nails/module-invoice",
+            "namespace": "Nails\\Invoice\\Driver\\Payment\\WorldPay\\",
             "data": {
                 "namespace": "Nails\\Invoice\\Driver\\Payment\\",
-                "class": "WorldPay",
-                "settings": [
-                    {
-                        "key": "sLabel",
-                        "label": "Label",
-                        "info": "The name of the provider, as seen by customers.",
-                        "default": "WorldPay"
-                    },
-                    {
-                        "key": "aConfig",
-                        "label": "Config",
-                        "type": "textarea",
-                        "info": "<a href=\"https://github.com/nails/driver-invoice-worldpay#configuration\">Configuration Documentation</a>",
-                        "encrypted": true
-                    },
-                    {
-                        "legend": "3DS Flex - JWT",
-                        "fields": [
-                            {
-                                "key": "s3dsFlexJwtIss",
-                                "label": "Issuer",
-                                "info": "An identifier for who is issuing the JWT."
-                            },
-                            {
-                                "key": "s3dsFlexJwtOrgUnitId",
-                                "label": "Organisational Unit ID",
-                                "info": "An identity associated with your account."
-                            },
-                            {
-                                "key": "s3dsFlexJwtMacKey",
-                                "label": "MAC Key",
-                                "info": "The MAC key for signing the JWT."
-                            }
-                        ]
-                    }
-                ]
+                "class": "WorldPay"
             }
         }
     }
