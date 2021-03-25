@@ -45,7 +45,7 @@ class WorldPay implements Interfaces\Component\Settings
             ->setKey(static::KEY_LABEL)
             ->setLabel('Label')
             ->setInfo('The name of the provider, as seen by customers.')
-            ->setDefault('Authorize.NET')
+            ->setDefault('WorldPay')
             ->setValidation([
                 FormValidation::RULE_REQUIRED,
             ]);

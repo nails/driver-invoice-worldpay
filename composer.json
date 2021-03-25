@@ -35,7 +35,7 @@
     "autoload": {
         "psr-4": {
             "Nails\\Invoice\\Driver\\Payment\\": "src/",
-            "Nails\\Invoice\\Driver\\Payment\\WorldPay\\": "src/"
+            "Nails\\Invoice\\Driver\\Payment\\WorldPay\\": "src/WorldPay/"
         }
     },
     "extra": {
