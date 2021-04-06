@@ -452,10 +452,10 @@ class WorldPay extends PaymentBase
              */
 
             $aOverrides = array_filter([
-                $this->getCardExpiryDateXml($oDoc, $oPaymentData->expiryDate),
-                $this->getCardHolderNameXml($oDoc, $oPaymentData->cardHolderName),
-                $this->getCardCvcXml($oDoc, $oPaymentData->cvc),
-                $this->getCardAddressXml($oDoc, $oPaymentData->cardAddress),
+                $this->getCardExpiryDateXml($oDoc, $oPaymentData->expiryDate ?? null),
+                $this->getCardHolderNameXml($oDoc, $oPaymentData->cardHolderName ?? null),
+                $this->getCardCvcXml($oDoc, $oPaymentData->cvc ?? null),
+                $this->getCardAddressXml($oDoc, $oPaymentData->cardAddress ?? null),
             ]);
 
             if (!empty($aOverrides)) {
