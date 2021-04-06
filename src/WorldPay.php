@@ -370,7 +370,7 @@ class WorldPay extends PaymentBase
         Resource\Invoice $oInvoice,
         Currency $oCurrency,
         int $iAmount,
-        Resource\Source $oSource,
+        ?Resource\Source $oSource,
         Resource\Payment $oPayment,
         Resource\Invoice\Data\Payment $oPaymentData,
         bool $bCustomerPresent
@@ -432,11 +432,11 @@ class WorldPay extends PaymentBase
      */
     private function getPaymentXml(
         \DOMDocument $oDoc,
-        Resource\Source $oSource,
+        ?Resource\Source $oSource,
         Resource\Invoice\Data\Payment $oPaymentData
     ): \DOMElement {
 
-        if ($oSource || property_exists('worldpay_token', $oPaymentData)) {
+        if ($oSource || !empty($oPaymentData->worldpay_token)) {
 
             //  Support paying with a token passed as a payment source, or as payment data
             $sPaymentToken = $oPaymentData->worldpay_token ?? $oSource->data->token;
@@ -451,51 +451,12 @@ class WorldPay extends PaymentBase
              * 4. cardAddress
              */
 
-            $aOverrides = [];
-
-            if (property_exists($oPaymentData, 'expiryDate')) {
-
-                if ($oPaymentData->expiryDate instanceof \Datetime) {
-                    $oDate = $oPaymentData->expiryDate;
-
-                } elseif ($oPaymentData->expiryDate instanceof DateTime) {
-                    $oDate = $oPaymentData->expiryDate->getDateTimeObject();
-
-                } elseif (is_string($oPaymentData->expiryDate)) {
-                    $oDate = $this->parseDateString($oPaymentData->expiryDate);
-                }
-
-                if (!empty($oDate)) {
-                    $aOverrides[] = $this->createXmlElement($oDoc, 'expiryDate', [
-                        $this->createXmlElement($oDoc, 'date', null, [
-                            'month' => $oDate->format('m'),
-                            'year'  => $oDate->format('Y'),
-                        ]),
-                    ]);
-                }
-            }
-
-            if (property_exists($oPaymentData, 'cardHolderName')) {
-                $aOverrides[] = $this->createXmlElement($oDoc, 'cardHolderName', $oPaymentData->cardHolderName);
-            }
-
-            if (property_exists($oPaymentData, 'cvc')) {
-                $aOverrides[] = $this->createXmlElement($oDoc, 'cvc', $oPaymentData->cvc);
-            }
-
-            if (property_exists($oPaymentData, 'cardAddress') && $oPaymentData->cardAddress instanceof Address) {
-                $aOverrides[] = $this->createXmlElement($oDoc, 'cardAddress', [
-                    $this->createXmlElement($oDoc, 'address', [
-                        $this->createXmlElement($oDoc, 'address1', $oPaymentData->cardAddress->line_1),
-                        $this->createXmlElement($oDoc, 'address2', $oPaymentData->cardAddress->line_2),
-                        $this->createXmlElement($oDoc, 'address3', $oPaymentData->cardAddress->line_3),
-                        $this->createXmlElement($oDoc, 'postalCode', $oPaymentData->cardAddress->postcode),
-                        $this->createXmlElement($oDoc, 'city', $oPaymentData->cardAddress->town),
-                        $this->createXmlElement($oDoc, 'state', $oPaymentData->cardAddress->region),
-                        $this->createXmlElement($oDoc, 'countryCode', $oPaymentData->cardAddress->country->iso),
-                    ]),
-                ]);
-            }
+            $aOverrides = array_filter([
+                $this->getCardExpiryDateXml($oDoc, $oPaymentData->expiryDate),
+                $this->getCardHolderNameXml($oDoc, $oPaymentData->cardHolderName),
+                $this->getCardCvcXml($oDoc, $oPaymentData->cvc),
+                $this->getCardAddressXml($oDoc, $oPaymentData->cardAddress),
+            ]);
 
             if (!empty($aOverrides)) {
                 $oPaymentInstrument = $this->createXmlElement($oDoc, 'paymentInstrument', [
@@ -508,11 +469,138 @@ class WorldPay extends PaymentBase
                 $oPaymentInstrument ?? null,
             ]), ['tokenScope' => 'shopper']);
 
+        } elseif (!empty($oPaymentData->cardNumber)) {
+
+            return $this->createXmlElement($oDoc, 'CARD-SSL', array_filter([
+                $this->getCardNumberXml($oDoc, $oPaymentData->cardNumber),
+                $this->getCardExpiryDateXml($oDoc, $oPaymentData->expiryDate ?? null),
+                $this->getCardHolderNameXml($oDoc, $oPaymentData->cardHolderName ?? null),
+                $this->getCardCvcXml($oDoc, $oPaymentData->cvc ?? null),
+                $this->getCardAddressXml($oDoc, $oPaymentData->cardAddress ?? null),
+            ]));
+
         } else {
+
             throw new DriverException(
                 'Must provide a payment source, or `worldpay_token`.'
             );
         }
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the XML for the cardNumber field
+     *
+     * @param \DOMDocument $oDoc
+     * @param              $sCardNumber
+     *
+     * @return \DOMElement
+     */
+    protected function getCardNumberXml(\DOMDocument $oDoc, $sCardNumber): \DOMElement
+    {
+        return $this->createXmlElement($oDoc, 'cardNumber', $sCardNumber);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the XML for the card expiryDate field
+     *
+     * @param \DOMDocument $oDoc
+     * @param              $mDate
+     *
+     * @return \DOMElement|null
+     */
+    protected function getCardExpiryDateXml(\DOMDocument $oDoc, $mDate): ?\DOMElement
+    {
+        if ($mDate instanceof \Datetime) {
+            $oDate = $mDate;
+
+        } elseif ($mDate instanceof DateTime) {
+            $oDate = $mDate->getDateTimeObject();
+
+        } elseif (is_string($mDate)) {
+            $oDate = $this->parseDateString($mDate);
+        }
+
+        if (empty($oDate)) {
+            return null;
+        }
+
+        return $this->createXmlElement($oDoc, 'expiryDate', [
+            $this->createXmlElement($oDoc, 'date', null, [
+                'month' => $oDate->format('m'),
+                'year'  => $oDate->format('Y'),
+            ]),
+        ]);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the XML for the cardHolderName field
+     *
+     * @param \DOMDocument $oDoc
+     * @param              $sCardHolderName
+     *
+     * @return \DOMElement|null
+     */
+    protected function getCardHolderNameXml(\DOMDocument $oDoc, $sCardHolderName): ?\DOMElement
+    {
+        if (empty($sCardHolderName)) {
+            return null;
+        }
+
+        return $this->createXmlElement($oDoc, 'cardHolderName', $sCardHolderName);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the XML for the card CVC field
+     *
+     * @param \DOMDocument $oDoc
+     * @param              $sCardCvc
+     *
+     * @return \DOMElement|null
+     */
+    protected function getCardCvcXml(\DOMDocument $oDoc, $sCardCvc): ?\DOMElement
+    {
+        if (empty($sCardCvc)) {
+            return null;
+        }
+
+        return $this->createXmlElement($oDoc, 'cvc', $sCardCvc);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the XML for the cardAddress field
+     *
+     * @param \DOMDocument $oDoc
+     * @param              $oCardAddress
+     *
+     * @return \DOMElement|null
+     */
+    protected function getCardAddressXml(\DOMDocument $oDoc, $oCardAddress): ?\DOMElement
+    {
+        if (!$oCardAddress instanceof Address) {
+            return null;
+        }
+
+        return $this->createXmlElement($oDoc, 'cardAddress', [
+            $this->createXmlElement($oDoc, 'address', [
+                $this->createXmlElement($oDoc, 'address1', $oCardAddress->line_1),
+                $this->createXmlElement($oDoc, 'address2', $oCardAddress->line_2),
+                $this->createXmlElement($oDoc, 'address3', $oCardAddress->line_3),
+                $this->createXmlElement($oDoc, 'postalCode', $oCardAddress->postcode),
+                $this->createXmlElement($oDoc, 'city', $oCardAddress->town),
+                $this->createXmlElement($oDoc, 'state', $oCardAddress->region),
+                $this->createXmlElement($oDoc, 'countryCode', $oCardAddress->country->iso),
+            ]),
+        ]);
     }
 
     // --------------------------------------------------------------------------
@@ -873,7 +961,7 @@ class WorldPay extends PaymentBase
      */
     private function obfuscateCvcInPaymentData(Resource\Invoice\Data\Payment $oPaymentData, Resource\Payment $oPayment)
     {
-        if (property_exists($oPaymentData, 'cvc')) {
+        if (!empty($oPaymentData->cvc)) {
 
             /** @var Payment $oPaymentModel */
             $oPaymentModel = Factory::model('Payment', Constants::MODULE_SLUG);
