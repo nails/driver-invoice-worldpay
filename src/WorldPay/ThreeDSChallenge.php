@@ -13,7 +13,7 @@ use Nails\Environment;
 class ThreeDSChallenge
 {
     const WP_3DS_ENDPOINT_TEST = 'https://secure-test.worldpay.com/shopper/3ds/challenge.html';
-    const WP_3DS_ENDPOINT_LIVE = 'https://secure.worldpay.com/shopper/3ds/challenge.html';
+    const WP_3DS_ENDPOINT_LIVE = 'https://centinelapi.cardinalcommerce.com/V2/Cruise/StepUp';
 
     // --------------------------------------------------------------------------
 
