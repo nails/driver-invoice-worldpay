@@ -13,16 +13,23 @@ This driver interfaces with WorldPay using the [Worldwide Payment Gateway XML AP
 
 ```json
 [
-    {
-        "merchant_code": "string",
-        "for_currency": "string",
-        "installation_id": "string",
-        "customer_present": bool,
-        "xml_username": "string",
-        "xml_password": "string>"
-    }
+    "PRODUCTION": [
+        {
+            "merchant_code": "string",
+            "for_currency": "string",
+            "installation_id": "string",
+            "customer_present": bool,
+            "xml_username": "string",
+            "xml_password": "string>"
+        }
+    ]
+    "STAGING": [ ... ],
+    "DEVELOPMENT": [ ... ]
 ]
 ```
+
+## `ENVIRONMENT`
+Each environment has its own set of independent configurations.
 
 ## `merchant_code`
 You will have one or more merchant codes associated with your account. This is given to you by WorldPay. Each merchant code should only appear once in the configuration array.
@@ -36,7 +43,7 @@ If required, supply the installation ID for this merchant code. This is only use
 ## `customer_present`
 If `true`, this configuration will be selected when the customer is present. If `false` it'll be selected when the customer is not present.
 
-> A merchant code will either be in `ECOM` or `RECUR` mode, with the former requiring the customer be present, and the latter for merchant initiated transactions.
+> A merchant code will either be in `ECOM` or `RECUR` mode, with the former for customer initiated transactions (customer present), and the latter for merchant initiated transactions (customer not present).
 
 ## `xml_username`
 The username to use when querying the XML API.
