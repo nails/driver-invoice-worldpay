@@ -1534,7 +1534,7 @@ class WorldPay extends PaymentBase
             ));
         }
 
-        return $aConfig->{Environment::get()} ?? [];
+        return $aConfig;
     }
 
     // --------------------------------------------------------------------------
