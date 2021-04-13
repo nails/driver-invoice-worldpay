@@ -1438,7 +1438,7 @@ class WorldPay extends PaymentBase
 
         /** @var \Nails\Currency\Service\Currency $oCurrencyService */
         $oCurrencyService = Factory::service('Currency', \Nails\Currency\Constants::MODULE_SLUG);
-        $sCurrency        = reset($this->getSupportedCurrencies());
+        $sCurrency        = current($this->getSupportedCurrencies());
         $oCurrency        = $oCurrencyService->getByIsoCode($sCurrency);
 
         $this->deleteToken(
