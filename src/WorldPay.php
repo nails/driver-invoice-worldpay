@@ -34,6 +34,7 @@ use Nails\Invoice\Constants;
 use Nails\Invoice\Driver\Payment\WorldPay\Ddc;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\AuthenticationException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\ParseException;
+use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\ConfigException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\WorldPayException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Xml\NodeNotFoundException;
 use Nails\Invoice\Driver\Payment\WorldPay\Sca;
@@ -1455,11 +1456,11 @@ class WorldPay extends PaymentBase
      *
      * @param array $aData The driver specific customer data
      *
-     * @throws DriverException
+     * @throws WorldPayException
      */
     public function createCustomer(array $aData = [])
     {
-        throw new DriverException(
+        throw new WorldPayException(
             sprintf(static::CUSTOMERS_ERROR, 'Creating')
         );
     }
@@ -1472,11 +1473,11 @@ class WorldPay extends PaymentBase
      * @param mixed $mCustomerId The gateway's customer ID
      * @param array $aData       Any driver specific data
      *
-     * @throws DriverException
+     * @throws WorldPayException
      */
     public function getCustomer($mCustomerId, array $aData = [])
     {
-        throw new DriverException(
+        throw new WorldPayException(
             sprintf(static::CUSTOMERS_ERROR, 'Fetching')
         );
     }
@@ -1489,11 +1490,11 @@ class WorldPay extends PaymentBase
      * @param mixed $mCustomerId The gateway's customer ID
      * @param array $aData       The driver specific customer data
      *
-     * @throws DriverException
+     * @throws WorldPayException
      */
     public function updateCustomer($mCustomerId, array $aData = [])
     {
-        throw new DriverException(
+        throw new WorldPayException(
             sprintf(static::CUSTOMERS_ERROR, 'Updating')
         );
     }
@@ -1505,11 +1506,11 @@ class WorldPay extends PaymentBase
      *
      * @param mixed $mCustomerId The gateway's customer ID
      *
-     * @throws DriverException
+     * @throws WorldPayException
      */
     public function deleteCustomer($mCustomerId)
     {
-        throw new DriverException(
+        throw new WorldPayException(
             sprintf(static::CUSTOMERS_ERROR, 'Deleting')
         );
     }
@@ -1520,10 +1521,21 @@ class WorldPay extends PaymentBase
      * Returns the decoded config array
      *
      * @return array
+     * @throws ConfigException
      */
     public function getConfig(): array
     {
-        return json_decode($this->getSetting('aConfig')) ?? [];
+        $aConfig = json_decode($this->getSetting('aConfig')) ?? [];
+        $aConfig = $aConfig->{Environment::get()} ?? null;
+
+        if ($aConfig === null) {
+            throw new ConfigException(sprintf(
+                'No config set for the %s environment',
+                Environment::get(),
+            ));
+        }
+
+        return $aConfig->{Environment::get()} ?? [];
     }
 
     // --------------------------------------------------------------------------
@@ -1547,14 +1559,12 @@ class WorldPay extends PaymentBase
         $mValue = reset($aConfig)->{$sProperty} ?? null;
 
         if (empty($mValue)) {
-            throw new DriverException(
-                sprintf(
-                    'Unable to ascertain property `%s` for currency: %s with customer present: %s',
-                    $sProperty,
-                    $sCurrency,
-                    json_encode($bCustomerPresent)
-                )
-            );
+            throw new ConfigException(sprintf(
+                'Unable to ascertain property `%s` for currency: %s with customer present: %s',
+                $sProperty,
+                $sCurrency,
+                json_encode($bCustomerPresent)
+            ));
         }
 
         return $mValue;
