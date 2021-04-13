@@ -40,7 +40,6 @@ use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Xml\NodeNotFoundException;
 use Nails\Invoice\Driver\Payment\WorldPay\Sca;
 use Nails\Invoice\Driver\Payment\WorldPay\ThreeDSChallenge;
 use Nails\Invoice\Driver\PaymentBase;
-use Nails\Invoice\Exception\DriverException;
 use Nails\Invoice\Exception\ResponseException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
@@ -482,7 +481,7 @@ class WorldPay extends PaymentBase
 
         } else {
 
-            throw new DriverException(
+            throw new WorldPayException(
                 'Must provide a payment source, or `worldpay_token`.'
             );
         }
@@ -798,7 +797,7 @@ class WorldPay extends PaymentBase
      *
      * @return \DOMDocument
      * @throws AuthenticationException
-     * @throws DriverException
+     * @throws WorldPayException
      * @throws ParseException
      * @throws WorldPayException
      * @throws FactoryException
@@ -909,7 +908,7 @@ class WorldPay extends PaymentBase
      *
      * @return $this
      * @throws AuthenticationException
-     * @throws DriverException
+     * @throws WorldPayException
      * @throws ParseException
      */
     private function handleRequestResponseError(\DOMDocument $oResponse): self
@@ -940,7 +939,7 @@ class WorldPay extends PaymentBase
                     );
 
                 default:
-                    throw new DriverException(
+                    throw new WorldPayException(
                         $oErrorNode->nodeValue,
                         $oErrorNode->attributes->getNamedItem('code')->nodeValue
                     );
@@ -1020,7 +1019,7 @@ class WorldPay extends PaymentBase
      * @param Sca\Data    $oScaData
      *
      * @throws AuthenticationException
-     * @throws DriverException
+     * @throws WorldPayException
      * @throws FactoryException
      * @throws NodeNotFoundException
      * @throws ParseException
@@ -1140,7 +1139,7 @@ class WorldPay extends PaymentBase
      *
      * @throws AuthenticationException
      * @throws DecodeException
-     * @throws DriverException
+     * @throws WorldPayException
      * @throws EnvironmentException
      * @throws FactoryException
      * @throws ParseException
@@ -1395,7 +1394,7 @@ class WorldPay extends PaymentBase
      * @param Resource\Source $oResource The Resouce object to update
      * @param array           $aData     Data passed from the caller
      *
-     * @throws DriverException
+     * @throws WorldPayException
      */
     public function createSource(
         Resource\Source &$oResource,
@@ -1403,7 +1402,7 @@ class WorldPay extends PaymentBase
     ): void {
         $sToken = getFromArray('worldpay_token', $aData);
         if (empty($sToken)) {
-            throw new DriverException('"worldpay_token" must be supplied when creating a WorldPay payment source.');
+            throw new WorldPayException('"worldpay_token" must be supplied when creating a WorldPay payment source.');
         }
 
         $oResource->data = (object) [
@@ -1421,7 +1420,7 @@ class WorldPay extends PaymentBase
     public function updateSource(
         Resource\Source $oResource
     ): void {
-        throw new DriverException(
+        throw new WorldPayException(
             sprintf(static::PAYMENT_SOURCES_ERROR, 'Updating')
         );
     }
@@ -1657,7 +1656,7 @@ class WorldPay extends PaymentBase
      *
      * @return array
      * @throws AuthenticationException
-     * @throws DriverException
+     * @throws WorldPayException
      * @throws FactoryException
      * @throws NodeNotFoundException
      * @throws ParseException
@@ -1721,7 +1720,7 @@ class WorldPay extends PaymentBase
      * @param Currency          $oCurrency The currency to use for the request (affects merchant code choice)
      *
      * @throws AuthenticationException
-     * @throws DriverException
+     * @throws WorldPayException
      * @throws FactoryException
      * @throws ParseException
      * @throws WorldPayException
