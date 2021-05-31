@@ -13,7 +13,7 @@
         "sass": "^1.28",
         "sass-loader": "^11.1",
         "webpack": "^5.16",
-        "webpack-cli": "^4.2"
+        "webpack-cli": "^4.7"
     },
     "scripts": {
         "build": "webpack",
