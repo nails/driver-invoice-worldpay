@@ -106,6 +106,11 @@ class WorldPay extends PaymentBase
     const PAYMENT_SOURCES_ERROR = '%s Payment Sources is not supported by the WorldPay driver';
     const CUSTOMERS_ERROR       = '%s Customers is not supported by the WorldPay driver';
 
+    /**
+     * Session
+     */
+    const SESSION_KEY = 'WORLDPAY_SESSION_ID';
+
     // --------------------------------------------------------------------------
 
     /**
@@ -378,8 +383,6 @@ class WorldPay extends PaymentBase
 
         /** @var Input $oInput */
         $oInput = Factory::service('Input');
-        /** @var Session $oSession */
-        $oSession = Factory::service('Session');
 
         $oDoc = $this->createXmlDocument();
 
@@ -397,7 +400,7 @@ class WorldPay extends PaymentBase
                             $this->getPaymentXml($oDoc, $oSource, $oPaymentData),
                             $this->createXmlElement($oDoc, 'session', null, array_filter([
                                 'shopperIPAddress' => $oInput->ipAddress(),
-                                'id'               => $oSession->getId(),
+                                'id'               => $this->getSessionId($oPayment),
                             ])),
                         ]),
                         $this->createXmlElement($oDoc, 'shopper', [
@@ -1148,12 +1151,10 @@ class WorldPay extends PaymentBase
      */
     private function scaSecondPayment(ScaResponse $oScaResponse, Sca\Data $oScaData, array $aPayload): void
     {
-        /** @var Session $oSession */
-        $oSession = Factory::service('Session');
-
         $sTransactionId = getFromArray('TransactionId', $aPayload);
         $sResponse      = getFromArray('Response', $aPayload);
         $sMachineCookie = $this->decryptMachineCookie(getFromArray('MD', $aPayload));
+        $oPayment       = $oScaData->getPayment();
 
         $oRequest = $this->createXmlDocument();
 
@@ -1164,9 +1165,9 @@ class WorldPay extends PaymentBase
                         $this->createXmlElement($oRequest, 'info3DSecure', [
                             $this->createXmlElement($oRequest, 'completedAuthentication'),
                         ]),
-                        $this->createXmlElement($oRequest, 'session', null, ['id' => $oSession->getId()]),
+                        $this->createXmlElement($oRequest, 'session', null, ['id' => $this->getSessionId($oPayment, false)]),
                     ], [
-                        'orderCode' => $oScaData->getPayment()->ref,
+                        'orderCode' => $oPayment->ref,
                     ]),
                 ]),
             ], [
@@ -1205,6 +1206,37 @@ class WorldPay extends PaymentBase
                     static::REQUEST_PAYMENT_ERROR_OTHER
                 );
         }
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Generates a unique session ID for this payment
+     *
+     * @param bool             $bForceNew Force a new session ID
+     * @param Resource\Payment $oPayment  The payment being charged
+     *
+     * @return string
+     * @throws FactoryException
+     */
+    private function getSessionId(Resource\Payment $oPayment, bool $bForceNew = true): string
+    {
+        /** @var Session $oSession */
+        $oSession = Factory::service('Session');
+
+        $sSessionId = $oSession->getUserData(static::SESSION_KEY);
+        if (empty($sSessionId) || $bForceNew) {
+
+            $sSessionId = sprintf(
+                '%s-%s',
+                $oPayment->ref,
+                generateToken()
+            );
+
+            $oSession->setUserData(static::SESSION_KEY, $sSessionId);
+        }
+
+        return $sSessionId;
     }
 
     // --------------------------------------------------------------------------
