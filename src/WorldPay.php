@@ -1076,13 +1076,13 @@ class WorldPay extends PaymentBase
                 );
 
                 $oThreeDSChallenge = new ThreeDSChallenge(
-                    $this->getSetting('s3dsFlexJwtIss'),
-                    $this->getSetting('s3dsFlexJwtOrgUnitId'),
+                    $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ISS),
+                    $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ORG_UNIT_ID),
                     current_url(),
                     $this->getNodeAtPath($oChallengeNode, 'acsURL')->nodeValue,
                     $this->getNodeAtPath($oChallengeNode, 'payload')->nodeValue,
                     $this->getNodeAtPath($oChallengeNode, 'transactionId3DS')->nodeValue,
-                    $this->getSetting('s3dsFlexJwtMacKey')
+                    $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_MAC)
                 );
 
                 $oScaResponse
@@ -1556,7 +1556,7 @@ class WorldPay extends PaymentBase
      */
     public function getConfig(): array
     {
-        $aConfig = json_decode($this->getSetting('aConfig')) ?? [];
+        $aConfig = json_decode($this->getSetting(Settings\WorldPay::KEY_CONFIG)) ?? [];
         $aConfig = $aConfig->{Environment::get()} ?? null;
 
         if ($aConfig === null) {
@@ -1672,9 +1672,9 @@ class WorldPay extends PaymentBase
     {
         return new Ddc(
             $sToken,
-            $this->getSetting('s3dsFlexJwtIss'),
-            $this->getSetting('s3dsFlexJwtOrgUnitId'),
-            $this->getSetting('s3dsFlexJwtMacKey'),
+            $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ISS),
+            $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ORG_UNIT_ID),
+            $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_MAC),
         );
     }
 
