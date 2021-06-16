@@ -1091,8 +1091,10 @@ class WorldPay extends PaymentBase
         } catch (\Exception $e) {
 
             $this
-                ->log('Exception caught, setting status as failed.')
-                ->log('%s - %s', [$e->getCode(), $e->getMessage()])
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [\Exception::class, $e->getCode(), $e->getMessage()]
+                )
                 ->log('Marking as failed');
 
             $oScaResponse->setStatusFailed(
@@ -1573,6 +1575,14 @@ class WorldPay extends PaymentBase
             }
 
         } catch (AuthenticationException $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [AuthenticationException::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking as failed');
+
             $oRefundResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1581,6 +1591,14 @@ class WorldPay extends PaymentBase
                 );
 
         } catch (ParseException $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [ParseException::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking as failed');
+
             $oRefundResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1589,6 +1607,14 @@ class WorldPay extends PaymentBase
                 );
 
         } catch (\Exception $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [\Exception::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking as failed');
+
             $oRefundResponse
                 ->setStatusFailed(
                     $e->getMessage(),
