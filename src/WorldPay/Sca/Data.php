@@ -113,6 +113,18 @@ class Data
     // --------------------------------------------------------------------------
 
     /**
+     * Returns the properties as a [JSON] string
+     *
+     * @return string
+     */
+    public function __toString()
+    {
+        return (string) json_encode($this->toArray());
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * @return Resource\Invoice
      */
     public function getInvoice(): Resource\Invoice
