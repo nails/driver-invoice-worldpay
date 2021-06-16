@@ -31,6 +31,8 @@ use Nails\Currency\Resource\Currency;
 use Nails\Environment;
 use Nails\Factory;
 use Nails\Invoice\Constants;
+use Nails\Invoice\Driver\Payment\WorldPay\Log;
+use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Driver\Payment\WorldPay\Ddc;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\AuthenticationException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Api\ParseException;
@@ -38,8 +40,8 @@ use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\ConfigException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\WorldPayException;
 use Nails\Invoice\Driver\Payment\WorldPay\Exceptions\Xml\NodeNotFoundException;
 use Nails\Invoice\Driver\Payment\WorldPay\Sca;
+use Nails\Invoice\Driver\Payment\WorldPay\Settings;
 use Nails\Invoice\Driver\Payment\WorldPay\ThreeDSChallenge;
-use Nails\Invoice\Driver\PaymentBase;
 use Nails\Invoice\Exception\ResponseException;
 use Nails\Invoice\Factory\ChargeResponse;
 use Nails\Invoice\Factory\CompleteResponse;
@@ -110,6 +112,14 @@ class WorldPay extends PaymentBase
      * Session
      */
     const SESSION_KEY = 'WORLDPAY_SESSION_ID';
+
+    // --------------------------------------------------------------------------
+
+    /** @var \Nails\Invoice\Driver\Payment\WorldPay\Log */
+    protected $oLog;
+
+    /** @var string */
+    protected $sLogRef;
 
     // --------------------------------------------------------------------------
 
@@ -223,6 +233,11 @@ class WorldPay extends PaymentBase
         /** @var ChargeResponse $oChargeResponse */
         $oChargeResponse = Factory::factory('ChargeResponse', Constants::MODULE_SLUG);
 
+        $this
+            ->setLogRef($oPayment->ref)
+            ->log('Initiating charge')
+            ->log('Current URL: %s', [current_url()]);
+
         if (!empty($oPaymentData->ddc_session_id)) {
             $this
                 ->chargeHandle3ds(
@@ -253,6 +268,8 @@ class WorldPay extends PaymentBase
         //  Hide sensitive fields
         $this->obfuscateCvcInPaymentData($oPaymentData, $oPayment);
 
+        $this->log('Returning control to caller');
+
         return $oChargeResponse;
     }
 
@@ -269,6 +286,8 @@ class WorldPay extends PaymentBase
         Resource\Source $oSource = null
     ): void {
 
+        $this->log('Handling 3DS charge');
+
         $oScaData = new WorldPay\Sca\Data(
             $oInvoice,
             $oCurrency,
@@ -278,6 +297,10 @@ class WorldPay extends PaymentBase
             clone $oPaymentData, // Clone allows CVC data (if supplied) to persist
             $bCustomerPresent
         );
+
+        $this
+            ->log('Marking Charge response object as SCA with the following data:')
+            ->log((string) $oScaData);
 
         $oChargeResponse
             ->setIsSca($oScaData->toArray());
@@ -310,6 +333,8 @@ class WorldPay extends PaymentBase
         Resource\Source $oSource = null
     ): void {
         try {
+
+            $this->log('Handling regular charge');
 
             $oResponse = $this
                 ->makeRequest(
@@ -380,6 +405,8 @@ class WorldPay extends PaymentBase
         Resource\Invoice\Data\Payment $oPaymentData,
         bool $bCustomerPresent
     ): \DOMDocument {
+
+        $this->log('Building Charge XML');
 
         /** @var Input $oInput */
         $oInput = Factory::service('Input');
@@ -635,6 +662,8 @@ class WorldPay extends PaymentBase
     {
         try {
 
+            $this->log('Processing last event');
+
             $oLastEventNode = $this->getNodeAtPath(
                 $oDoc,
                 'paymentService.reply.orderStatus.payment.lastEvent'
@@ -642,12 +671,19 @@ class WorldPay extends PaymentBase
 
             switch ($oLastEventNode->nodeValue) {
                 case static::XML_TRANSACTION_AUTHORISED:
+
+                    $this
+                        ->log('Marking as complete')
+                        ->log('Setting transaction ID: %s', [$oPayment->ref]);
+
                     $oResponse
                         ->setStatusComplete()
                         ->setTransactionId($oPayment->ref);
                     break;
 
                 case static::XML_TRANSACTION_REFUSED:
+
+                    $this->log('Marking as failed (decline)');
                     $oResponse
                         ->setStatusFailed(
                             'Card was declined',
@@ -657,6 +693,8 @@ class WorldPay extends PaymentBase
                     break;
 
                 case static::XML_TRANSACTION_ERROR:
+
+                    $this->log('Marking as failed (error)');
                     $oResponse
                         ->setStatusFailed(
                             'An error occurred',
@@ -667,6 +705,9 @@ class WorldPay extends PaymentBase
             }
 
         } catch (NodeNotFoundException $e) {
+
+            $this->log('Marking as failed (error)');
+
             $oResponse
                 ->setStatusFailed(
                     'An error occurred, `paymentService.reply.orderStatus.payment.lastEvent` node not found',
@@ -753,11 +794,20 @@ class WorldPay extends PaymentBase
      */
     private function getNodeAtPath($oDoc, string $sPath): \DOMElement
     {
+        $this
+            ->log('Searching the following document for node: %s', [$sPath])
+            ->log(
+                $oDoc instanceof \DOMDocument
+                    ? $oDoc->saveXML()
+                    : $oDoc->ownerDocument->saveHTML($oDoc)
+            );
+
         $aPath     = explode('.', $sPath);
         $sRootNode = array_shift($aPath);
 
         $oRootNode = $oDoc->getElementsByTagName($sRootNode)->item(0);
         if (empty($oRootNode)) {
+            $this->log('Node not found');
             throw new NodeNotFoundException('Failed to parse XML path; missing root node "' . $sRootNode . '"');
         }
 
@@ -777,6 +827,7 @@ class WorldPay extends PaymentBase
             }
 
             if (empty($oCurrentNode)) {
+                $this->log('Node not found');
                 throw new NodeNotFoundException(sprintf(
                     'Failed to parse XML path; missing node at path "%s"',
                     implode('.', $aCurrentPath)
@@ -785,6 +836,8 @@ class WorldPay extends PaymentBase
 
             $oPreviousNode = $oCurrentNode;
         }
+
+        $this->log('Node found with value: %s', [$oPreviousNode->nodeValue]);
 
         return $oPreviousNode;
     }
@@ -807,6 +860,8 @@ class WorldPay extends PaymentBase
      */
     private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent = true, string $sMachineCookie = null): \DOMDocument
     {
+        $this->log('Preparing API request');
+
         /** @var Post $oHttpPost */
         $oHttpPost = Factory::factory('HttpRequestPost');
         $oHttpPost
@@ -828,7 +883,23 @@ class WorldPay extends PaymentBase
                 ->setHeader('Cookie', $sMachineCookie);
         }
 
+        $this
+            ->log('Executing API request')
+            ->log('Request URI: %s', [$oHttpPost->getBaseUri()])
+            ->log('Request Headers:')
+            ->log(json_encode($oHttpPost->getHeaders(), JSON_PRETTY_PRINT))
+            ->log('Request Body:')
+            ->log($oDoc->saveXML());
+
         $oHttpResponse = $oHttpPost->execute();
+
+        $this
+            ->log('Response received')
+            ->log('Response Code: %s', [$oHttpResponse->getStatusCode()])
+            ->log('Response Headers:')
+            ->log(json_encode($oHttpResponse->getHeaders(), JSON_PRETTY_PRINT))
+            ->log('Response Body:')
+            ->log($oHttpResponse->getBody(false));
 
         if ($oHttpResponse->getStatusCode() !== HttpCodes::STATUS_OK) {
             throw new WorldPayException(
@@ -863,6 +934,8 @@ class WorldPay extends PaymentBase
      */
     private function setResponseMachineCode(HttpResponse $oHttpResponse, \DOMDocument $oResponse): self
     {
+        $this->log('Extract machine cookie from response');
+
         //  Add the Machine Cookie as part of the document
         $aMachineCookie = array_filter($oHttpResponse->getHeader('Set-Cookie'), function ($sCookie) {
             return preg_match('/^machine=/', $sCookie);
@@ -885,6 +958,11 @@ class WorldPay extends PaymentBase
      */
     private function extractErrorNode(\DOMDocument $oResponse): ?\DOMElement
     {
+        $this->log('Look for error identifiers in response [%s or %s]', [
+            'paymentService.reply.error',
+            'paymentService.reply.orderStatus.error',
+        ]);
+
         try {
 
             $oNode = $this->getNodeAtPath($oResponse, 'paymentService.reply.error');
@@ -895,7 +973,7 @@ class WorldPay extends PaymentBase
                 $oNode = $this->getNodeAtPath($oResponse, 'paymentService.reply.orderStatus.error');
 
             } catch (NodeNotFoundException $e) {
-                //  No errors detected
+                $this->log('No errors detected');
             }
         }
 
@@ -966,6 +1044,8 @@ class WorldPay extends PaymentBase
     {
         if (!empty($oPaymentData->cvc)) {
 
+            $this->log('Obfuscating CVC in payment data');
+
             /** @var Payment $oPaymentModel */
             $oPaymentModel = Factory::model('Payment', Constants::MODULE_SLUG);
 
@@ -997,6 +1077,11 @@ class WorldPay extends PaymentBase
 
             $oScaData = Sca\Data::buildFromPaymentData($oData);
 
+            $this
+                ->setLogRef($oScaData->getPayment()->ref)
+                ->log('Handling SCA')
+                ->log('Current URL: %s', [current_url()]);
+
             if (empty($oInput->post())) {
                 $this->scaInitialPayment($oScaResponse, $oScaData);
             } else {
@@ -1004,11 +1089,19 @@ class WorldPay extends PaymentBase
             }
 
         } catch (\Exception $e) {
+
+            $this
+                ->log('Exception caught, setting status as failed.')
+                ->log('%s - %s', [$e->getCode(), $e->getMessage()])
+                ->log('Marking as failed');
+
             $oScaResponse->setStatusFailed(
                 $e->getMessage(),
                 $e->getCode()
             );
         }
+
+        $this->log('Returning control to caller');
 
         return $oScaResponse;
     }
@@ -1032,6 +1125,8 @@ class WorldPay extends PaymentBase
      */
     private function scaInitialPayment(ScaResponse $oScaResponse, Sca\Data $oScaData): void
     {
+        $this->log('Handling SCA initial payment');
+
         $oRequest = $this->buildChargeXml(
             $oScaData->getInvoice(),
             $oScaData->getCurrency(),
@@ -1042,6 +1137,10 @@ class WorldPay extends PaymentBase
             $oScaData->isCustomerPresent(),
         );
 
+        $this
+            ->log('Adding 3DS data to charge XML')
+            ->log('Retrieving <order> node');
+
         //  Add 3DS data
         $oOrderNode = $this->getNodeAtPath($oRequest, 'paymentService.submit.order');
 
@@ -1051,13 +1150,19 @@ class WorldPay extends PaymentBase
         //  @todo (Pablo 08/03/2021) - add transactionRiskData node
 
         //  Add additional3DSData node
+        $a3dsData = [
+            'dfReferenceId'       => $oScaData->getPaymentData()->ddc_session_id,
+            'challengeWindowSize' => 'fullPage',
+            'challengePreference' => 'noPreference',
+        ];
+
+        $this
+            ->log('Inserting 3DS data to <order> node; data to be inserted is:')
+            ->log(json_encode($a3dsData, JSON_PRETTY_PRINT));
+
         $oOrderNode
             ->appendChild(
-                $this->createXmlElement($oRequest, 'additional3DSData', null, [
-                    'dfReferenceId'       => $oScaData->getPaymentData()->ddc_session_id,
-                    'challengeWindowSize' => 'fullPage',
-                    'challengePreference' => 'noPreference',
-                ])
+                $this->createXmlElement($oRequest, 'additional3DSData', null, $a3dsData)
             );
 
         try {
@@ -1070,10 +1175,16 @@ class WorldPay extends PaymentBase
 
             try {
 
+                $this->log('Determining if challenge is required');
+
                 $oChallengeNode = $this->getNodeAtPath(
                     $oResponse,
                     'paymentService.reply.orderStatus.challengeRequired.threeDSChallengeDetails'
                 );
+
+                $this
+                    ->log('Challenge requested')
+                    ->log('Building 3DS object so we may determine challenge URL');
 
                 $oThreeDSChallenge = new ThreeDSChallenge(
                     $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ISS),
@@ -1085,15 +1196,27 @@ class WorldPay extends PaymentBase
                     $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_MAC)
                 );
 
+                $sChallengeUrl  = $oThreeDSChallenge::getUrl();
+                $aChallengeData = [
+                    'JWT' => $oThreeDSChallenge->getJwt(),
+                    'MD'  => $this->extractEncryptedMachineCookie($oResponse),
+                ];
+
+                $this
+                    ->log('Challenge URL:')
+                    ->log($sChallengeUrl)
+                    ->log('Challenge POST data:')
+                    ->log(json_encode($aChallengeData, JSON_PRETTY_PRINT))
+                    ->log('Marking payment as redirect');
+
                 $oScaResponse
                     ->setIsRedirect(true)
-                    ->setRedirectUrl($oThreeDSChallenge::getUrl())
-                    ->setRedirectPostData([
-                        'JWT' => $oThreeDSChallenge->getJwt(),
-                        'MD'  => $this->extracEncryptedMachineCookie($oResponse),
-                    ]);
+                    ->setRedirectUrl($sChallengeUrl)
+                    ->setRedirectPostData($aChallengeData);
 
             } catch (NodeNotFoundException $e) {
+
+                $this->log('Challenge not requested');
 
                 /**
                  * No challenge is required; check the lastEvent to ensure that
@@ -1103,6 +1226,14 @@ class WorldPay extends PaymentBase
             }
 
         } catch (AuthenticationException $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [AuthenticationException::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking payment as failed');
+
             $oScaResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1111,6 +1242,14 @@ class WorldPay extends PaymentBase
                 );
 
         } catch (ParseException $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [ParseException::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking payment as failed');
+
             $oScaResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1119,6 +1258,14 @@ class WorldPay extends PaymentBase
                 );
 
         } catch (\Exception $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [\Exception::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking payment as failed');
+
             $oScaResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1151,6 +1298,8 @@ class WorldPay extends PaymentBase
      */
     private function scaSecondPayment(ScaResponse $oScaResponse, Sca\Data $oScaData, array $aPayload): void
     {
+        $this->log('Handling SCA second payment');
+
         $sTransactionId = getFromArray('TransactionId', $aPayload);
         $sResponse      = getFromArray('Response', $aPayload);
         $sMachineCookie = $this->decryptMachineCookie(getFromArray('MD', $aPayload));
@@ -1183,6 +1332,14 @@ class WorldPay extends PaymentBase
             $this->processLastEvent($oResponse, $oScaResponse, $oScaData->getPayment());
 
         } catch (AuthenticationException $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [AuthenticationException::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking payment as failed');
+
             $oScaResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1191,6 +1348,14 @@ class WorldPay extends PaymentBase
                 );
 
         } catch (ParseException $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [ParseException::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking payment as failed');
+
             $oScaResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1199,6 +1364,14 @@ class WorldPay extends PaymentBase
                 );
 
         } catch (\Exception $e) {
+
+            $this
+                ->log(
+                    'Caught exception: %s with code: %s and message: %s',
+                    [\Exception::class, $e->getCode(), $e->getMessage()]
+                )
+                ->log('Marking payment as failed');
+
             $oScaResponse
                 ->setStatusFailed(
                     $e->getMessage(),
@@ -1227,6 +1400,8 @@ class WorldPay extends PaymentBase
         $sSessionId = $oSession->getUserData(static::SESSION_KEY);
         if (empty($sSessionId) || $bForceNew) {
 
+            $this->log('New session ID required, generating');
+
             $sSessionId = sprintf(
                 '%s-%s',
                 $oPayment->ref,
@@ -1235,6 +1410,8 @@ class WorldPay extends PaymentBase
 
             $oSession->setUserData(static::SESSION_KEY, $sSessionId);
         }
+
+        $this->log('Session ID is %s', [$sSessionId]);
 
         return $sSessionId;
     }
@@ -1253,6 +1430,7 @@ class WorldPay extends PaymentBase
      */
     private function extractEncryptedMachineCookie(\DOMDocument $oDoc): string
     {
+        $this->log('Extracting encrypted machine cookie');
         /** @var Encrypt $oEncrypt */
         $oEncrypt = Factory::service('Encrypt');
 
@@ -1335,6 +1513,10 @@ class WorldPay extends PaymentBase
         Resource\Invoice $oInvoice
     ): RefundResponse {
 
+        $this
+            ->log('Handling refund')
+            ->log('Current URL: %s', [current_url()]);
+
         /** @var RefundResponse $oRefundResponse */
         $oRefundResponse = Factory::factory('RefundResponse', Constants::MODULE_SLUG);
 
@@ -1414,6 +1596,8 @@ class WorldPay extends PaymentBase
                     static::REQUEST_REFUND_ERROR_OTHER
                 );
         }
+
+        $this->log('Returning control to caller');
 
         return $oRefundResponse;
     }
@@ -1780,5 +1964,43 @@ class WorldPay extends PaymentBase
         );
 
         $oResponse = $this->makeRequest($oRequest, $oCurrency);
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Sets the log reference
+     *
+     * @param string $sRef
+     *
+     * @return $this
+     */
+    protected function setLogRef(string $sRef): self
+    {
+        $this->sLogRef = $sRef;
+        return $this;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Write to the payment log
+     *
+     * @param string $sLine          The text to write
+     * @param array  $aSubstitutions Any substitutions to add into the text
+     *
+     * @return $this
+     */
+    protected function log(string $sLine, array $aSubstitutions = []): self
+    {
+        if (empty($this->oLog) && (bool) $this->getSetting(Settings\WorldPay::KEY_DEBUG)) {
+            $this->oLog = new Log($this->sLogRef);
+        }
+
+        if (!empty($this->oLog)) {
+            $this->oLog->line($sLine, $aSubstitutions);
+        }
+
+        return $this;
     }
 }

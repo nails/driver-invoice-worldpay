@@ -21,6 +21,7 @@ class WorldPay implements Interfaces\Component\Settings
     const KEY_3DS_JWT_ISS         = 's3dsFlexJwtIss';
     const KEY_3DS_JWT_ORG_UNIT_ID = 's3dsFlexJwtOrgUnitId';
     const KEY_3DS_JWT_MAC         = 's3dsFlexJwtMacKey';
+    const KEY_DEBUG               = 'bDebug';
 
     // --------------------------------------------------------------------------
 
@@ -72,6 +73,18 @@ class WorldPay implements Interfaces\Component\Settings
                 FormValidation::RULE_REQUIRED,
             ]);
 
+        /** @var Setting $oDebug */
+        $oDebug = Factory::factory('ComponentSetting');
+        $oDebug
+            ->setKey(static::KEY_DEBUG)
+            ->setType(Form::FIELD_BOOLEAN)
+            ->setLabel('Debug Mode')
+            ->setInfo('When enabled, the driver will generate verbose log files')
+            ->setDefault(false)
+            ->setValidation([
+                FormValidation::RULE_IS_BOOL,
+            ]);
+
         /** @var Setting $o3dsFlexJwtIss */
         $o3dsFlexJwtIss = Factory::factory('ComponentSetting');
         $o3dsFlexJwtIss
@@ -100,6 +113,7 @@ class WorldPay implements Interfaces\Component\Settings
         return [
             $oLabel,
             $oConfig,
+            $oDebug,
             $o3dsFlexJwtIss,
             $o3dsFlexJwtOrgUnitId,
             $o3dsFlexJwtMacKey,
