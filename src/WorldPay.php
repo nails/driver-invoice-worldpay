@@ -89,10 +89,17 @@ class WorldPay extends PaymentBase
     /**
      * XML Transaction states
      */
-    const XML_TRANSACTION_AUTHORISED = 'AUTHORISED';
-    const XML_TRANSACTION_REFUSED    = 'REFUSED';
-    const XML_TRANSACTION_CAPTURED   = 'CAPTURED';
-    const XML_TRANSACTION_ERROR      = 'ERROR';
+    const XML_TRANSACTION_AUTHORISED         = 'AUTHORISED';
+    const XML_TRANSACTION_REFUSED            = 'REFUSED';
+    const XML_TRANSACTION_CANCELLED          = 'CANCELLED';
+    const XML_TRANSACTION_CAPTURED           = 'CAPTURED';
+    const XML_TRANSACTION_PARTIALLY_CAPTURED = 'PARTIALLY_CAPTURED';
+    const XML_TRANSACTION_SETTLED            = 'SETTLED';
+    const XML_TRANSACTION_SENT_FOR_REFUND    = 'SENT_FOR_REFUND';
+    const XML_TRANSACTION_REFUNDED           = 'REFUNDED';
+    const XML_TRANSACTION_REFUND_FAILED      = 'REFUND_FAILED';
+    const XML_TRANSACTION_CHARGED_BACK       = 'CHARGED_BACK';
+    const XML_TRANSACTION_ERROR              = 'ERROR';
 
     /**
      * User facing error messages for request exceptions
@@ -1699,6 +1706,12 @@ class WorldPay extends PaymentBase
     {
         return [
             static::XML_TRANSACTION_CAPTURED,
+            static::XML_TRANSACTION_PARTIALLY_CAPTURED,
+            static::XML_TRANSACTION_SETTLED,
+            static::XML_TRANSACTION_SENT_FOR_REFUND,
+            static::XML_TRANSACTION_REFUNDED,
+            static::XML_TRANSACTION_REFUND_FAILED,
+            static::XML_TRANSACTION_CHARGED_BACK,
         ];
     }
 
