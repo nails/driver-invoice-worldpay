@@ -1251,7 +1251,7 @@ class WorldPay extends PaymentBase
      * @throws NodeNotFoundException
      * @throws EnvironmentException
      */
-    private function extracEncryptedMachineCookie(\DOMDocument $oDoc): string
+    private function extractEncryptedMachineCookie(\DOMDocument $oDoc): string
     {
         /** @var Encrypt $oEncrypt */
         $oEncrypt = Factory::service('Encrypt');
@@ -1265,7 +1265,7 @@ class WorldPay extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
-     * Decodes an encrypted/encided cookie generated with extracEncryptedMachineCookie()
+     * Decodes an encrypted/encided cookie generated with extractEncryptedMachineCookie()
      *
      * @param string|null $sEncryptedCookie The encoded Cookie
      *
