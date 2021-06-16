@@ -91,6 +91,7 @@ class WorldPay extends PaymentBase
      */
     const XML_TRANSACTION_AUTHORISED = 'AUTHORISED';
     const XML_TRANSACTION_REFUSED    = 'REFUSED';
+    const XML_TRANSACTION_CAPTURED   = 'CAPTURED';
     const XML_TRANSACTION_ERROR      = 'ERROR';
 
     /**
@@ -1524,6 +1525,69 @@ class WorldPay extends PaymentBase
 
         try {
 
+            //  Check status of payment is CAPTURED
+            $this->log('Checking status of payment');
+            $oRequest = $this->createXmlDocument();
+            $oRequest->appendChild(
+                $this->createXmlElement($oRequest, 'paymentService', [
+                    $this->createXmlElement($oRequest, 'inquiry', [
+                        $this->createXmlElement($oRequest, 'orderInquiry', null, [
+                            'orderCode' => $oPayment->ref,
+                        ]),
+                    ]),
+                ], [
+                    'version'      => static::PAYMENT_SERVICE_VERSION,
+                    'merchantCode' => $this->getMerchantCode($oCurrency->code),
+                ])
+            );
+
+            $oResponse = $this->makeRequest($oRequest, $oCurrency);
+
+            $oLastEventNode = $this->getNodeAtPath($oResponse, 'paymentService.reply.orderStatus.payment.lastEvent');
+
+            if (!in_array($oLastEventNode->nodeValue, $this->getRefundableStatuses())) {
+                $sError = sprintf(
+                    'Payment is not in an acceptable state to be refunded (is %s, must be one of %s)',
+                    $oLastEventNode->nodeValue,
+                    implode(', ', $this->getRefundableStatuses())
+                );
+                $this->log($sError);
+                throw new WorldPayException($sError);
+            }
+
+            //  Check how much can be refunded
+            $this->log('Check refundable amount');
+            $oRequest = $this->createXmlDocument();
+            $oRequest->appendChild(
+                $this->createXmlElement($oRequest, 'paymentService', [
+                    $this->createXmlElement($oRequest, 'inquiry', [
+                        $this->createXmlElement($oRequest, 'refundableAmountInquiry', null, [
+                            'orderCode' => $oPayment->ref,
+                        ]),
+                    ]),
+                ], [
+                    'version'      => static::PAYMENT_SERVICE_VERSION,
+                    'merchantCode' => $this->getMerchantCode($oCurrency->code),
+                ])
+            );
+
+            $oResponse = $this->makeRequest($oRequest, $oCurrency);
+
+            $oAmountNode       = $this->getNodeAtPath($oResponse, 'paymentService.reply.refundableAmount.amount');
+            $iRefundableAmount = (int) $oAmountNode->getAttribute('value');
+
+            if ($iAmount > $iRefundableAmount) {
+                $sError = sprintf(
+                    'Requested refund amount of %s exceeds allowable amount of %s',
+                    $oCurrency->format($iAmount),
+                    $oCurrency->format($iRefundableAmount),
+                );
+                $this->log($sError);
+                throw new WorldPayException($sError);
+            }
+
+            //  Issue refund request
+            $this->log('Issue the refund request');
             $oRequest = $this->createXmlDocument();
             $oRequest->appendChild(
                 $this->createXmlElement($oRequest, 'paymentService', [
@@ -1622,6 +1686,20 @@ class WorldPay extends PaymentBase
         $this->log('Returning control to caller');
 
         return $oRefundResponse;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the statuses a transaction can be in to be accepted for refund
+     *
+     * @return string[]
+     */
+    protected function getRefundableStatuses(): array
+    {
+        return [
+            static::XML_TRANSACTION_CAPTURED,
+        ];
     }
 
     // --------------------------------------------------------------------------
