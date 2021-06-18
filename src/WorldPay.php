@@ -1324,7 +1324,7 @@ class WorldPay extends PaymentBase
                         $this->createXmlElement($oRequest, 'info3DSecure', [
                             $this->createXmlElement($oRequest, 'completedAuthentication'),
                         ]),
-                        $this->createXmlElement($oRequest, 'session', null, ['id' => $this->getSessionId($oPayment, false)]),
+                        $this->createXmlElement($oRequest, 'session', null, ['id' => $this->getSessionId($oPayment)]),
                     ], [
                         'orderCode' => $oPayment->ref,
                     ]),
@@ -1396,33 +1396,15 @@ class WorldPay extends PaymentBase
     /**
      * Generates a unique session ID for this payment
      *
-     * @param bool             $bForceNew Force a new session ID
-     * @param Resource\Payment $oPayment  The payment being charged
+     * @param Resource\Payment $oPayment The payment being charged
      *
      * @return string
      * @throws FactoryException
      */
-    private function getSessionId(Resource\Payment $oPayment, bool $bForceNew = true): string
+    private function getSessionId(Resource\Payment $oPayment): string
     {
-        /** @var Session $oSession */
-        $oSession = Factory::service('Session');
-
-        $sSessionId = $oSession->getUserData(static::SESSION_KEY);
-        if (empty($sSessionId) || $bForceNew) {
-
-            $this->log('New session ID required, generating');
-
-            $sSessionId = sprintf(
-                '%s-%s',
-                $oPayment->ref,
-                generateToken()
-            );
-
-            $oSession->setUserData(static::SESSION_KEY, $sSessionId);
-        }
-
+        $sSessionId = $oPayment->ref;
         $this->log('Session ID is %s', [$sSessionId]);
-
         return $sSessionId;
     }
 
