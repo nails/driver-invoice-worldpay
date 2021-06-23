@@ -246,7 +246,7 @@ class WorldPay extends PaymentBase
         $this
             ->setLogRef($oPayment->ref)
             ->log('Initiating charge')
-            ->log('Current URL: %s', [current_url()]);
+            ->log('Current URL: %s', [$this->getCurrentUrl()]);
 
         if (!empty($oPaymentData->ddc_session_id)) {
             $this
@@ -1090,7 +1090,7 @@ class WorldPay extends PaymentBase
             $this
                 ->setLogRef($oScaData->getPayment()->ref)
                 ->log('Handling SCA')
-                ->log('Current URL: %s', [current_url()]);
+                ->log('Current URL: %s', [$this->getCurrentUrl()]);
 
             if (empty($oInput->post())) {
                 $this->scaInitialPayment($oScaResponse, $oScaData);
@@ -1201,7 +1201,7 @@ class WorldPay extends PaymentBase
                 $oThreeDSChallenge = new ThreeDSChallenge(
                     $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ISS),
                     $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ORG_UNIT_ID),
-                    current_url(),
+                    $this->getCurrentUrl(),
                     $this->getNodeAtPath($oChallengeNode, 'acsURL')->nodeValue,
                     $this->getNodeAtPath($oChallengeNode, 'payload')->nodeValue,
                     $this->getNodeAtPath($oChallengeNode, 'transactionId3DS')->nodeValue,
@@ -1509,7 +1509,7 @@ class WorldPay extends PaymentBase
 
         $this
             ->log('Handling refund')
-            ->log('Current URL: %s', [current_url()]);
+            ->log('Current URL: %s', [$this->getCurrentUrl()]);
 
         /** @var RefundResponse $oRefundResponse */
         $oRefundResponse = Factory::factory('RefundResponse', Constants::MODULE_SLUG);
@@ -2101,5 +2101,17 @@ class WorldPay extends PaymentBase
         }
 
         return $this;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Retursn the current URL
+     *
+     * @return string
+     */
+    protected function getCurrentUrl(): string
+    {
+        return isCli() ? 'CLI' : current_url();
     }
 }
