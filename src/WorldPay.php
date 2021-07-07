@@ -1528,7 +1528,10 @@ class WorldPay extends PaymentBase
                     ]),
                 ], [
                     'version'      => static::PAYMENT_SERVICE_VERSION,
-                    'merchantCode' => $this->getMerchantCode($oCurrency->code),
+                    'merchantCode' => $this->getMerchantCode(
+                        $oCurrency->code,
+                        $oPayment->customer_present
+                    ),
                 ])
             );
 
