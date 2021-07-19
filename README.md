@@ -22,7 +22,7 @@ This driver interfaces with WorldPay using the [Worldwide Payment Gateway XML AP
             "xml_username": "string",
             "xml_password": "string>"
         }
-    ]
+    ],
     "STAGING": [ ... ],
     "DEVELOPMENT": [ ... ]
 }
@@ -63,7 +63,7 @@ If you're using the WorldPay 3DS Flex product it will need configured with some 
             "org_unit_id": "string",
             "mac_key": "string"
         }
-    ]
+    ],
     "STAGING": [ ... ],
     "DEVELOPMENT": [ ... ]
 }
