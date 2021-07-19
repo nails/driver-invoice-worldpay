@@ -9,10 +9,10 @@ This is the "WorldPay" driver for the Nails Invoice module, it allows the module
 # Configuration
 WorldPay requires a potentially large number of configurations to be recorded in order to support various currencies, installations, and services.
 
-This driver interfaces with WorldPay using the [Worldwide Payment Gateway XML API](https://developer.worldpay.com/docs/wpg) and uses a configuration array which contains a configuration object per merchant code to be supported. The driver will choose a configuration object at the time of making a charge depending on the currency being checked out, and whether the customer is present or not.
+This driver interfaces with WorldPay using the [Worldwide Payment Gateway XML API](https://developer.worldpay.com/docs/wpg) and uses a configuration object which contains a configuration object per merchant code to be supported. The driver will choose a configuration object at the time of making a charge depending on the currency being checked out, and whether the customer is present or not.
 
 ```json
-[
+{
     "PRODUCTION": [
         {
             "merchant_code": "string",
@@ -25,7 +25,7 @@ This driver interfaces with WorldPay using the [Worldwide Payment Gateway XML AP
     ]
     "STAGING": [ ... ],
     "DEVELOPMENT": [ ... ]
-]
+}
 ```
 
 ## `ENVIRONMENT`
@@ -50,3 +50,21 @@ The username to use when querying the XML API.
 
 ## `xml_password`
 The password to use when querying the XML API.
+
+
+# 3DS Configuration
+If you're using the WorldPay 3DS Flex product it will need configured with some values. The configuration is similar to the above in that multiple environments can be defined at once. It takes the following structure:
+
+```json
+{
+    "PRODUCTION": [
+        {
+            "issuer": "string",
+            "org_unit_id": "string",
+            "mac_key": "string"
+        }
+    ]
+    "STAGING": [ ... ],
+    "DEVELOPMENT": [ ... ]
+}
+```

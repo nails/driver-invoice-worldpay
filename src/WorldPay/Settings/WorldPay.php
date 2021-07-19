@@ -16,12 +16,10 @@ use Nails\Factory;
  */
 class WorldPay implements Interfaces\Component\Settings
 {
-    const KEY_LABEL               = 'sLabel';
-    const KEY_CONFIG              = 'aConfig';
-    const KEY_3DS_JWT_ISS         = 's3dsFlexJwtIss';
-    const KEY_3DS_JWT_ORG_UNIT_ID = 's3dsFlexJwtOrgUnitId';
-    const KEY_3DS_JWT_MAC         = 's3dsFlexJwtMacKey';
-    const KEY_DEBUG               = 'bDebug';
+    const KEY_LABEL      = 'sLabel';
+    const KEY_CONFIG     = 'aConfig';
+    const KEY_3DS_CONFIG = 'a3dsConfig';
+    const KEY_DEBUG      = 'bDebug';
 
     // --------------------------------------------------------------------------
 
@@ -67,7 +65,11 @@ class WorldPay implements Interfaces\Component\Settings
             ->setKey(static::KEY_CONFIG)
             ->setType(Form::FIELD_TEXTAREA)
             ->setLabel('Config')
-            ->setInfo('<a href="https://github.com/nails/driver-invoice-worldpay#configuration">Configuration Documentation</a>')
+            ->setInfo(anchor(
+                'https://github.com/nails/driver-invoice-worldpay#configuration',
+                'Configuration Documentation &nbsp;<b class="fa fa-external-link-alt"></b>',
+                'class="btn btn-xs btn-default" target="_blank"'
+            ))
             ->setEncrypted(true)
             ->setValidation([
                 FormValidation::RULE_REQUIRED,
@@ -85,38 +87,28 @@ class WorldPay implements Interfaces\Component\Settings
                 FormValidation::RULE_IS_BOOL,
             ]);
 
-        /** @var Setting $o3dsFlexJwtIss */
-        $o3dsFlexJwtIss = Factory::factory('ComponentSetting');
-        $o3dsFlexJwtIss
-            ->setKey(static::KEY_3DS_JWT_ISS)
-            ->setLabel('Issuer')
-            ->setInfo('An identifier for who is issuing the JWT.')
-            ->setFieldset('3DS Flex - JWT');
-
-        /** @var Setting $o3dsFlexJwtOrgUnitId */
-        $o3dsFlexJwtOrgUnitId = Factory::factory('ComponentSetting');
-        $o3dsFlexJwtOrgUnitId
-            ->setKey(static::KEY_3DS_JWT_ORG_UNIT_ID)
-            ->setLabel('Organisational Unit ID')
-            ->setInfo('An identity associated with your account.')
-            ->setFieldset('3DS Flex - JWT');
-
-        /** @var Setting $o3dsFlexJwtMacKey */
-        $o3dsFlexJwtMacKey = Factory::factory('ComponentSetting');
-        $o3dsFlexJwtMacKey
-            ->setKey(static::KEY_3DS_JWT_MAC)
-            ->setLabel('MAC Key')
-            ->setInfo('The MAC key for signing the JWT.')
+        /** @var Setting $o3dsFlexConfig */
+        $o3dsFlexConfig = Factory::factory('ComponentSetting');
+        $o3dsFlexConfig
+            ->setKey(static::KEY_3DS_CONFIG)
+            ->setType(Form::FIELD_TEXTAREA)
+            ->setLabel('Config')
+            ->setInfo(anchor(
+                'https://github.com/nails/driver-invoice-worldpay#3ds-configuration',
+                'Configuration Documentation &nbsp;<b class="fa fa-external-link-alt"></b>',
+                'class="btn btn-xs btn-default" target="_blank"'
+            ))
             ->setEncrypted(true)
-            ->setFieldset('3DS Flex - JWT');
+            ->setFieldset('3DS Flex')
+            ->setValidation([
+                FormValidation::RULE_REQUIRED,
+            ]);
 
         return [
             $oLabel,
             $oConfig,
             $oDebug,
-            $o3dsFlexJwtIss,
-            $o3dsFlexJwtOrgUnitId,
-            $o3dsFlexJwtMacKey,
+            $o3dsFlexConfig,
         ];
     }
 }

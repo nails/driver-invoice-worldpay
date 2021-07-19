@@ -1199,13 +1199,13 @@ class WorldPay extends PaymentBase
                     ->log('Building 3DS object so we may determine challenge URL');
 
                 $oThreeDSChallenge = new ThreeDSChallenge(
-                    $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ISS),
-                    $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ORG_UNIT_ID),
+                    $this->get3dsIssuer(),
+                    $this->get3dsOrgUnitId(),
                     $this->getCurrentUrl(),
                     $this->getNodeAtPath($oChallengeNode, 'acsURL')->nodeValue,
                     $this->getNodeAtPath($oChallengeNode, 'payload')->nodeValue,
                     $this->getNodeAtPath($oChallengeNode, 'transactionId3DS')->nodeValue,
-                    $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_MAC)
+                    $this->get3dsMacKey()
                 );
 
                 $sChallengeUrl  = $oThreeDSChallenge::getUrl();
@@ -1842,8 +1842,8 @@ class WorldPay extends PaymentBase
      */
     public function getConfig(): array
     {
-        $aConfig = json_decode($this->getSetting(Settings\WorldPay::KEY_CONFIG)) ?? [];
-        $aConfig = $aConfig->{Environment::get()} ?? null;
+        $oConfig = json_decode($this->getSetting(Settings\WorldPay::KEY_CONFIG)) ?? [];
+        $aConfig = $oConfig->{Environment::get()} ?? null;
 
         if ($aConfig === null) {
             throw new ConfigException(sprintf(
@@ -1950,6 +1950,93 @@ class WorldPay extends PaymentBase
     // --------------------------------------------------------------------------
 
     /**
+     * Returns the decoded 3DS config object
+     *
+     * @return \stdClass
+     * @throws ConfigException
+     */
+    public function get3dsConfig(): \stdClass
+    {
+        $oConfig = json_decode($this->getSetting(Settings\WorldPay::KEY_3DS_CONFIG)) ?? [];
+        $oConfig = $oConfig->{Environment::get()} ?? null;
+
+        if ($oConfig === null) {
+            throw new ConfigException(sprintf(
+                'No 3DS config set for the %s environment',
+                Environment::get(),
+            ));
+        }
+
+        return $oConfig;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns a 3DS config property
+     *
+     * @param string $sProperty The property to return
+     *
+     * @return string|null
+     * @throws ConfigException
+     */
+    protected function get3dsConfigProperty(string $sProperty): ?string
+    {
+        $oConfig = $this->get3dsConfig();
+        $mValue  = $oConfig->{$sProperty} ?? null;
+
+        if (empty($mValue)) {
+            throw new ConfigException(sprintf(
+                'Unable to ascertain property `%s` ',
+                $sProperty
+            ));
+        }
+
+        return $mValue;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the 3DS issuer
+     *
+     * @return string|null
+     * @throws ConfigException
+     */
+    public function get3dsIssuer(): ?string
+    {
+        return (string) $this->get3dsConfigProperty('issuer') ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the 3DS Organisational ID
+     *
+     * @return string|null
+     * @throws ConfigException
+     */
+    public function get3dsOrgUnitId(): ?string
+    {
+        return (string) $this->get3dsConfigProperty('org_unit_id') ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Returns the 3DS MAC Key
+     *
+     * @return string|null
+     * @throws ConfigException
+     */
+    public function get3dsMacKey(): ?string
+    {
+        return (string) $this->get3dsConfigProperty('mac_key') ?: null;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
      * Returns a new DDC object for handling 3DS Flex
      *
      * @return Ddc
@@ -1958,9 +2045,9 @@ class WorldPay extends PaymentBase
     {
         return new Ddc(
             $sToken,
-            $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ISS),
-            $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_ORG_UNIT_ID),
-            $this->getSetting(Settings\WorldPay::KEY_3DS_JWT_MAC),
+            $this->get3dsIssuer(),
+            $this->get3dsOrgUnitId(),
+            $this->get3dsMacKey()
         );
     }
 
