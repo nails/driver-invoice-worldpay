@@ -310,7 +310,7 @@ class WorldPay extends PaymentBase
 
         $this
             ->log('Marking Charge response object as SCA with the following data:')
-            ->log((string) $oScaData);
+            ->log((string) $oScaData, [], true);
 
         $oChargeResponse
             ->setIsSca($oScaData->toArray());
@@ -809,7 +809,9 @@ class WorldPay extends PaymentBase
             ->log(
                 $oDoc instanceof \DOMDocument
                     ? $oDoc->saveXML()
-                    : $oDoc->ownerDocument->saveHTML($oDoc)
+                    : $oDoc->ownerDocument->saveHTML($oDoc),
+                [],
+                true
             );
 
         $aPath     = explode('.', $sPath);
@@ -897,9 +899,9 @@ class WorldPay extends PaymentBase
             ->log('Executing API request')
             ->log('Request URI: %s', [$oHttpPost->getBaseUri()])
             ->log('Request Headers:')
-            ->log(json_encode($oHttpPost->getHeaders(), JSON_PRETTY_PRINT))
+            ->log(json_encode($oHttpPost->getHeaders(), JSON_PRETTY_PRINT), [], true)
             ->log('Request Body:')
-            ->log($oDoc->saveXML());
+            ->log($oDoc->saveXML(), [], true);
 
         $oHttpResponse = $oHttpPost->execute();
 
@@ -907,9 +909,9 @@ class WorldPay extends PaymentBase
             ->log('Response received')
             ->log('Response Code: %s', [$oHttpResponse->getStatusCode()])
             ->log('Response Headers:')
-            ->log(json_encode($oHttpResponse->getHeaders(), JSON_PRETTY_PRINT))
+            ->log(json_encode($oHttpResponse->getHeaders(), JSON_PRETTY_PRINT), [], true)
             ->log('Response Body:')
-            ->log($oHttpResponse->getBody(false));
+            ->log($oHttpResponse->getBody(false), [], true);
 
         if ($oHttpResponse->getStatusCode() !== HttpCodes::STATUS_OK) {
             throw new WorldPayException(
@@ -1170,7 +1172,7 @@ class WorldPay extends PaymentBase
 
         $this
             ->log('Inserting 3DS data to <order> node; data to be inserted is:')
-            ->log(json_encode($a3dsData, JSON_PRETTY_PRINT));
+            ->log(json_encode($a3dsData, JSON_PRETTY_PRINT), [], true);
 
         $oOrderNode
             ->appendChild(
@@ -1216,9 +1218,9 @@ class WorldPay extends PaymentBase
 
                 $this
                     ->log('Challenge URL:')
-                    ->log($sChallengeUrl)
+                    ->log($sChallengeUrl, [], true)
                     ->log('Challenge POST data:')
-                    ->log(json_encode($aChallengeData, JSON_PRETTY_PRINT))
+                    ->log(json_encode($aChallengeData, JSON_PRETTY_PRINT), [], true)
                     ->log('Marking payment as redirect');
 
                 $oScaResponse
@@ -1545,7 +1547,7 @@ class WorldPay extends PaymentBase
                     $oLastEventNode->nodeValue,
                     implode(', ', $this->getRefundableStatuses())
                 );
-                $this->log($sError);
+                $this->log($sError, [], true);
                 throw new WorldPayException($sError);
             }
 
@@ -1576,7 +1578,7 @@ class WorldPay extends PaymentBase
                     $oCurrency->format($iAmount),
                     $oCurrency->format($iRefundableAmount),
                 );
-                $this->log($sError);
+                $this->log($sError, [], true);
                 throw new WorldPayException($sError);
             }
 
@@ -2177,17 +2179,18 @@ class WorldPay extends PaymentBase
      *
      * @param string $sLine          The text to write
      * @param array  $aSubstitutions Any substitutions to add into the text
+     * @param bool   $bEscapeLine    Whether to escape the % character from $sLine or not
      *
      * @return $this
      */
-    protected function log(string $sLine, array $aSubstitutions = []): self
+    protected function log(string $sLine, array $aSubstitutions = [], bool $bEscapeLine = false): self
     {
         if (empty($this->oLog) && (bool) $this->getSetting(Settings\WorldPay::KEY_DEBUG)) {
             $this->oLog = new Log($this->sLogRef);
         }
 
         if (!empty($this->oLog)) {
-            $this->oLog->line($sLine, $aSubstitutions);
+            $this->oLog->line($sLine, $aSubstitutions, $bEscapeLine);
         }
 
         return $this;

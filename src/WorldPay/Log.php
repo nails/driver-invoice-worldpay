@@ -44,12 +44,14 @@ class Log
      *
      * @param string $sLine          The line to log
      * @param array  $aSubstitutions Any substitutions to mix into the line
+     * @param bool   $bEscapeLine    Whether to escape the % character from $sLine or not
      *
      * @return $this
      * @throws FactoryException
      */
-    public function line(string $sLine, array $aSubstitutions): self
+    public function line(string $sLine, array $aSubstitutions, bool $bEscapeLine = false): self
     {
+        $sLine = $bEscapeLine ? $this->escape($sLine) : $sLine;
         $sLine = sprintf($sLine, ...$aSubstitutions);
 
         foreach (explode(PHP_EOL, $sLine) as $sLine) {
@@ -63,5 +65,19 @@ class Log
         }
 
         return $this;
+    }
+
+    // --------------------------------------------------------------------------
+
+    /**
+     * Escape the % character from a string
+     *
+     * @param string $sLine The string to escape
+     *
+     * @return string
+     */
+    public function escape(string $sLine): string
+    {
+        return str_replace('%', '%%', $sLine);
     }
 }
