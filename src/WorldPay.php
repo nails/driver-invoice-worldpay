@@ -142,7 +142,8 @@ class WorldPay extends PaymentBase
      */
     public function isAvailable(Resource\Invoice $oInvoice): bool
     {
-        return true;
+        //  This driver is designed to be used manually due to complexities in WorldPay's APIs
+        return false;
     }
 
     // --------------------------------------------------------------------------
