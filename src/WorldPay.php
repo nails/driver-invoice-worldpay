@@ -199,13 +199,7 @@ class WorldPay extends PaymentBase
      */
     public function getCheckoutAssets(): array
     {
-        return [
-            [
-                'checkout.min.js',
-                $this->getSlug(),
-                'JS',
-            ],
-        ];
+        return [];
     }
 
     // --------------------------------------------------------------------------
