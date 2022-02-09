@@ -94,6 +94,7 @@ class ThreeDSChallenge
                 'ObjectifyPayload' => true,
             ],
             $this->sMacKey,
+            Ddc::JWT_ENCODING
         );
     }
 }

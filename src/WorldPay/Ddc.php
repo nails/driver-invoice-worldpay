@@ -14,6 +14,7 @@ class Ddc
 {
     const WP_DDC_ENDPOINT_TEST = 'https://secure-test.worldpay.com/shopper/3ds/ddc.html';
     const WP_DDC_ENDPOINT_LIVE = 'https://centinelapi.cardinalcommerce.com/V1/Cruise/Collect';
+    const JWT_ENCODING         = 'HS256';
 
     // --------------------------------------------------------------------------
 
@@ -99,6 +100,7 @@ class Ddc
                 'OrgUnitId' => $this->sOrgUnitId,
             ],
             $this->sMacKey,
+            static::JWT_ENCODING
         );
     }
 
