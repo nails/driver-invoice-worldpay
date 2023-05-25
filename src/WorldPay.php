@@ -734,7 +734,7 @@ class WorldPay extends PaymentBase
         $oImp = new \DOMImplementation();
         $oDoc = $oImp->createDocument(
             'paymentService',
-            null,
+            '',
             $oImp->createDocumentType(
                 'paymentService',
                 '-//Worldpay//DTD Worldpay PaymentService v1//EN',
