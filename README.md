@@ -2,7 +2,6 @@
 
 ![license](https://img.shields.io/badge/license-MIT-green.svg)
 [![CircleCI branch](https://img.shields.io/circleci/project/github/nails/driver-invoice-worldpay.svg)](https://circleci.com/gh/nails/driver-invoice-worldpay)
-[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/nails/driver-invoice-worldpay/badges/quality-score.png)](https://scrutinizer-ci.com/g/nails/driver-invoice-worldpay)
 
 This is the "WorldPay" driver for the Nails Invoice module, it allows the module to accept payments using the WorldPay payment processor.
 
