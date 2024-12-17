@@ -115,9 +115,10 @@ class Ddc
      */
     public function getIframeBody(string $sId = 'ddc-form'): string
     {
-        $sUrl = static::getUrl();
-        $sJwt = $this->getJwt();
-        $sBin = $this->getToken();
+        $sUrl     = static::getUrl();
+        $sJwt     = $this->getJwt();
+        $sBin     = $this->getToken();
+        $sTagOpen = scriptOpen();
 
         return <<<EOT
         <html>
@@ -129,7 +130,7 @@ class Ddc
                     <input type="hidden" name="Bin" value="$sBin" />
                     <input type="hidden" name="JWT" value="$sJwt" />
                 </form>
-                <script>
+                $sTagOpen
                 window.onload = function() {
                     document.getElementById('$sId').submit();
                 }
