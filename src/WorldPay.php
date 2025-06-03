@@ -232,7 +232,7 @@ class WorldPay extends PaymentBase
         string $sSuccessUrl,
         string $sErrorUrl,
         bool $bCustomerPresent,
-        Resource\Source $oSource = null
+        ?Resource\Source $oSource = null
     ): ChargeResponse {
 
         /** @var ChargeResponse $oChargeResponse */
@@ -288,7 +288,7 @@ class WorldPay extends PaymentBase
         Resource\Payment $oPayment,
         Resource\Invoice $oInvoice,
         bool $bCustomerPresent,
-        Resource\Source $oSource = null
+        ?Resource\Source $oSource = null
     ): void {
 
         $this->log('Handling 3DS charge');
@@ -335,7 +335,7 @@ class WorldPay extends PaymentBase
         Resource\Payment $oPayment,
         Resource\Invoice $oInvoice,
         bool $bCustomerPresent,
-        Resource\Source $oSource = null
+        ?Resource\Source $oSource = null
     ): void {
         try {
 
@@ -865,7 +865,7 @@ class WorldPay extends PaymentBase
      * @throws WorldPayException
      * @throws FactoryException
      */
-    private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent = true, string $sMachineCookie = null): \DOMDocument
+    private function makeRequest(\DOMDocument $oDoc, Currency $oCurrency, bool $bCustomerPresent = true, ?string $sMachineCookie = null): \DOMDocument
     {
         $this->log('Preparing API request');
 
