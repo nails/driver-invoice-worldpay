@@ -30,9 +30,9 @@
     "prefer-stable": true,
     "require":
     {
+        "ext-dom": "*",
         "nails/module-invoice": "dev-feature/pre-new-admin",
         "firebase/php-jwt": "^6.0"
-        "ext-dom": "*"
     },
     "require-dev":
     {
