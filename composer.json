@@ -31,7 +31,7 @@
     "require":
     {
         "nails/module-invoice": "dev-develop",
-        "firebase/php-jwt": "^6.0",
+        "firebase/php-jwt": "^7.0",
         "ext-dom": "*"
     },
     "require-dev":
