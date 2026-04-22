@@ -30,6 +30,7 @@
     "prefer-stable": true,
     "require":
     {
+        "php": ">=8.3",
         "nails/module-invoice": "dev-develop",
         "firebase/php-jwt": "^7.0",
         "ext-dom": "*"
