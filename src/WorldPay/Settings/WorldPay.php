@@ -2,6 +2,7 @@
 
 namespace Nails\Invoice\Driver\Payment\WorldPay\Settings;
 
+use Nails\Invoice\Driver\Payment\WorldPay\Admin\Permission;
 use Nails\Common\Helper\Form;
 use Nails\Common\Interfaces;
 use Nails\Common\Service\FormValidation;
@@ -36,9 +37,9 @@ class WorldPay implements Interfaces\Component\Settings
     /**
      * @inheritDoc
      */
-    public function getPermissions(): array
+    public function getPermission(): string
     {
-        return [];
+        return Permission\Settings\WorldPay::class;
     }
 
     // --------------------------------------------------------------------------
